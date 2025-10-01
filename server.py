@@ -84,6 +84,25 @@ def resolve_tenant(request_json, request_args):
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from db_utils import init_db, load_users, save_users, db_lock
 import db_utils as dbm
+from domain_models import (
+    ACCOUNT_STATUS_AGENT_STOCK,
+    ACCOUNT_STATUS_DISTRIBUTOR_STOCK,
+    ACCOUNT_STATUS_SOLD,
+    SALE_TYPE_DIRECT,
+    SALE_TYPE_DISTRIBUTION,
+    ROLE_ADMIN,
+    ROLE_AGENT,
+    ROLE_DISTRIBUTOR,
+    TRANSACTION_ADMIN_TO_AGENT,
+    TRANSACTION_AGENT_PURCHASE,
+    TRANSACTION_AGENT_DIRECT_SALE,
+    TRANSACTION_AGENT_TO_DISTRIBUTOR,
+    TRANSACTION_DISTRIBUTOR_SALE,
+    TRANSACTION_LEGACY,
+    normalize_ledger_records,
+    record_transaction,
+    update_account_state,
+)
 
 # 导入Flask及相关工具
 from flask import Flask, render_template, request, redirect, url_for, session, send_file, jsonify, flash
@@ -296,9 +315,10 @@ def load_ledger() -> list:
         with open(LEDGER_FILE, 'r', encoding='utf-8') as f:
             try:
                 records = json.load(f).get('records', [])
-                for r in records:
-                    r.setdefault('role', 'admin')
-                return records
+                normalised = normalize_ledger_records(records)
+                for r in normalised:
+                    r.setdefault('role', r.get('actor_role', 'admin'))
+                return normalised
             except Exception:
                 return []
     return []
@@ -792,15 +812,15 @@ def add_user():
     save_users(users)
     # ledger
     records = load_ledger()
-    records.append({
-        'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'admin': session.get('admin'),
-        'role': 'admin',
-        'product': product,
-        'price': price,
-        'count': 1,
-        'revenue': price
-    })
+    record_transaction(
+        records,
+        transaction_type=TRANSACTION_LEGACY,
+        actor=session.get('admin'),
+        actor_role=ROLE_ADMIN,
+        amount=price,
+        quantity=1,
+        product=product,
+    )
     save_ledger(records)
     return redirect(url_for('user_list'))
 
@@ -855,24 +875,34 @@ def mark_sold(name):
     """
     users = load_users()
     current = session.get('agent')
-    if name in users and users[name].get('owner') == current and users[name].get('forsale'):
-        users[name]['forsale'] = False
-                # ✅ 新增：写入售出时间与售出人
-        users[name]['sold_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    state = users.get(name, {}).get('accounting', {}) if name in users else {}
+    if (
+        name in users
+        and state.get('owner') == current
+        and state.get('status') == ACCOUNT_STATUS_AGENT_STOCK
+    ):
+        sold_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        update_account_state(
+            users[name],
+            status=ACCOUNT_STATUS_SOLD,
+            sale_type=SALE_TYPE_DIRECT,
+            manager=current,
+            sold_at=sold_time,
+        )
         users[name]['sold_by'] = current
         save_users(users)
-        # add ledger record when item sold
         records = load_ledger()
-        price = users[name].get('price', 0)
-        records.append({
-            'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'admin': current,
-            'role': 'agent',
-            'product': users[name].get('product', ''),
-            'price': price,
-            'count': 1,
-            'revenue': price
-        })
+        record_transaction(
+            records,
+            transaction_type=TRANSACTION_AGENT_DIRECT_SALE,
+            actor=current,
+            actor_role=ROLE_AGENT,
+            amount=float(users[name].get('price', 0) or 0),
+            quantity=1,
+            product=users[name].get('product', ''),
+            account_username=name,
+            sale_type=SALE_TYPE_DIRECT,
+        )
         save_ledger(records)
         if request.is_json or request.headers.get('Accept') == 'application/json':
             return jsonify({'success': True})
@@ -892,26 +922,38 @@ def batch_sold():
     users = load_users()
     current = session.get('agent')
     sold_any = False
+    records = load_ledger()
     for name in names:
-        if name in users and users[name].get('owner') == current and users[name].get('forsale'):
-            users[name]['forsale'] = False
-                        # ✅ 新增：写入售出时间与售出人
-            users[name]['sold_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        state = users.get(name, {}).get('accounting', {}) if name in users else {}
+        if (
+            name in users
+            and state.get('owner') == current
+            and state.get('status') == ACCOUNT_STATUS_AGENT_STOCK
+        ):
+            sold_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            update_account_state(
+                users[name],
+                status=ACCOUNT_STATUS_SOLD,
+                sale_type=SALE_TYPE_DIRECT,
+                manager=current,
+                sold_at=sold_time,
+            )
             users[name]['sold_by'] = current
-            price = users[name].get('price', 0)
-            records = load_ledger()
-            records.append({
-                'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'admin': current,
-                'role': 'agent',
-                'product': users[name].get('product', ''),
-                'price': price,
-                'count': 1,
-                'revenue': price
-            })
-            save_ledger(records)
+            record_transaction(
+                records,
+                transaction_type=TRANSACTION_AGENT_DIRECT_SALE,
+                actor=current,
+                actor_role=ROLE_AGENT,
+                amount=float(users[name].get('price', 0) or 0),
+                quantity=1,
+                product=users[name].get('product', ''),
+                account_username=name,
+                sale_type=SALE_TYPE_DIRECT,
+            )
             sold_any = True
-    save_users(users)
+    if sold_any:
+        save_users(users)
+        save_ledger(records)
     return redirect(url_for('agent_users'))
 
 
@@ -1048,30 +1090,38 @@ def agent_batch_action():
     names = request.form.getlist('names')
     users = load_users()
     current = session.get('agent')
+    records = load_ledger()
     for name in names:
-        if name not in users or users[name].get('owner') != current:
+        state = users.get(name, {}).get('accounting', {}) if name in users else {}
+        if name not in users or state.get('owner') != current:
             continue
         if action == 'enable':
             users[name]['enabled'] = True
         elif action == 'disable':
             users[name]['enabled'] = False
-        elif action == 'sold' and users[name].get('forsale'):
-            users[name]['forsale'] = False
-            users[name]['sold_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # ✅ 关键：补 sold_at
-            users[name]['sold_by'] = current                                        # ✅ 关键：补 sold_by
-            price = users[name].get('price', 0)
-            records = load_ledger()
-            records.append({
-                'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'admin': current,
-                'role': 'agent',
-                'product': users[name].get('product', ''),
-                'price': price,
-                'count': 1,
-                'revenue': price
-            })
-            save_ledger(records)
+        elif action == 'sold' and state.get('status') == ACCOUNT_STATUS_AGENT_STOCK:
+            sold_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            update_account_state(
+                users[name],
+                status=ACCOUNT_STATUS_SOLD,
+                sale_type=SALE_TYPE_DIRECT,
+                manager=current,
+                sold_at=sold_time,
+            )
+            users[name]['sold_by'] = current
+            record_transaction(
+                records,
+                transaction_type=TRANSACTION_AGENT_DIRECT_SALE,
+                actor=current,
+                actor_role=ROLE_AGENT,
+                amount=float(users[name].get('price', 0) or 0),
+                quantity=1,
+                product=users[name].get('product', ''),
+                account_username=name,
+                sale_type=SALE_TYPE_DIRECT,
+            )
     save_users(users)
+    save_ledger(records)
     return redirect(url_for('agent_users'))
 
 
@@ -1370,14 +1420,15 @@ def bulk_create():
     }
     if count > 0 and price > 0:
         records = load_ledger()
-        records.append({
-            'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'admin': session.get('admin'),
-            'product': product,
-            'price': price,
-            'count': count,
-            'revenue': price * count
-        })
+        record_transaction(
+            records,
+            transaction_type=TRANSACTION_LEGACY,
+            actor=session.get('admin'),
+            actor_role=ROLE_ADMIN,
+            amount=price * count,
+            quantity=count,
+            product=product,
+        )
         save_ledger(records)
     return redirect(url_for('bulk_manage'))
 
@@ -1402,11 +1453,18 @@ def ledger_view():
     
     # 过滤记录
     # Only show admin role records to avoid counting agent sales
-    filtered_records = [r for r in records if r.get('role') == 'admin']
+    filtered_records = [
+        r for r in records
+        if (r.get('actor_role') or r.get('role')) == 'admin'
+        and r.get('direction', 'in') == 'in'
+    ]
     if product_filter:
         filtered_records = [r for r in filtered_records if r.get('product') == product_filter]
     if admin_filter:
-        filtered_records = [r for r in filtered_records if r.get('admin') == admin_filter]
+        filtered_records = [
+            r for r in filtered_records
+            if (r.get('actor') or r.get('admin')) == admin_filter
+        ]
     if start:
         filtered_records = [r for r in filtered_records if r.get('time', '') >= start]
     if end:
@@ -1444,34 +1502,48 @@ def ledger_view():
     
     # 计算各时间段收入（只统计管理员角色的记录）
     daily = sum(
-        r.get('revenue', 0) for r in records
-        if r.get('role') == 'admin' and r.get('time', '').startswith(today)
+        float(r.get('amount', r.get('revenue', 0)) or 0)
+        for r in records
+        if (r.get('actor_role') or r.get('role')) == 'admin'
+        and r.get('direction', 'in') == 'in'
+        and r.get('time', '').startswith(today)
     )
     monthly = sum(
-        r.get('revenue', 0) for r in records
-        if r.get('role') == 'admin' and r.get('time', '').startswith(this_month)
+        float(r.get('amount', r.get('revenue', 0)) or 0)
+        for r in records
+        if (r.get('actor_role') or r.get('role')) == 'admin'
+        and r.get('direction', 'in') == 'in'
+        and r.get('time', '').startswith(this_month)
     )
     yearly = sum(
-        r.get('revenue', 0) for r in records
-        if r.get('role') == 'admin' and r.get('time', '').startswith(this_year)
+        float(r.get('amount', r.get('revenue', 0)) or 0)
+        for r in records
+        if (r.get('actor_role') or r.get('role')) == 'admin'
+        and r.get('direction', 'in') == 'in'
+        and r.get('time', '').startswith(this_year)
     )
-    total = sum(r.get('revenue', 0) for r in records if r.get('role') == 'admin')
+    total = sum(
+        float(r.get('amount', r.get('revenue', 0)) or 0)
+        for r in records
+        if (r.get('actor_role') or r.get('role')) == 'admin'
+        and r.get('direction', 'in') == 'in'
+    )
     
     # 计算销售人员统计（区分申请人和管理员）
     salesperson_stats = {}
     for r in records:
-        if r.get('role') == 'admin':
-            # 如果有agent字段，说明是申请审批类型，销售人员是申请人
+        if (r.get('actor_role') or r.get('role')) == 'admin' and r.get('direction', 'in') == 'in':
             if r.get('agent'):
                 salesperson = r.get('agent')
+            elif r.get('counterparty'):
+                salesperson = r.get('counterparty')
             else:
-                # 否则是管理员直接创建，销售人员是管理员
-                salesperson = r.get('admin')
-            
+                salesperson = r.get('actor') or r.get('admin')
+
             if salesperson not in salesperson_stats:
-                salesperson_stats[salesperson] = {'count': 0, 'revenue': 0}
-            salesperson_stats[salesperson]['count'] += r.get('count', 0)
-            salesperson_stats[salesperson]['revenue'] += r.get('revenue', 0)
+                salesperson_stats[salesperson] = {'count': 0, 'revenue': 0.0}
+            salesperson_stats[salesperson]['count'] += int(r.get('quantity', r.get('count', 0)) or 0)
+            salesperson_stats[salesperson]['revenue'] += float(r.get('amount', r.get('revenue', 0)) or 0)
     
     # 按收入排序销售人员
     sorted_salesperson_stats = sorted(salesperson_stats.items(), key=lambda x: x[1]['revenue'], reverse=True)
@@ -1597,85 +1669,45 @@ def agent_ledger():
     
     records = [
         r for r in load_ledger()
-        if r.get('admin') == current_user and (r.get('role') == 'agent' or r.get('role') == 'distributor')
+        if (r.get('actor') or r.get('admin')) == current_user
+        and (r.get('actor_role') or r.get('role')) in {'agent', 'distributor'}
     ]
     if product_filter:
         records = [r for r in records if r.get('product') == product_filter]
-    
+
+    def _record_time(entry: dict) -> str:
+        return entry.get('time', '')
+
+    if start:
+        records = [r for r in records if _record_time(r) >= start]
+    if end:
+        records = [r for r in records if _record_time(r) <= end]
+
+    records.sort(key=lambda x: _record_time(x), reverse=True)
+
     from datetime import datetime
     today = datetime.now().strftime('%Y-%m-%d')
     this_month = datetime.now().strftime('%Y-%m')
     this_year = datetime.now().strftime('%Y')
 
-    # 针对分销分配类型的记录，使用assigned_at（分配时间）而不是time（原始售卖时间）
-    filtered_records = []
+    daily = monthly = yearly = total = 0.0
     for r in records:
-        # 根据记录类型选择正确的时间字段进行日期筛选
-        if r.get('transaction_type') == 'distribution_assignment' and r.get('assigned_at'):
-            record_time = r.get('assigned_at')
-        else:
-            record_time = r.get('time', '')
-        
-        # 应用日期筛选
-        if start and record_time < start:
+        if r.get('direction', 'in') != 'in':
             continue
-        if end and record_time > end:
-            continue
-        
-        filtered_records.append(r)
-
-    # 按时间倒序排序（最近的记录在最上面）
-    filtered_records.sort(key=lambda x: x.get('assigned_at', x.get('time', '')), reverse=True)
-
-    # 统计计算：确保每个用户编号只被计算一次，防止重复统计
-    daily = 0
-    monthly = 0
-    yearly = 0
-    total = 0
-    processed_user_ids = set()  # 用于记录已处理过的用户编号
-    
-    # 先创建一个按用户编号分组的记录映射，确保每个用户编号只保留一条记录
-    user_records = {}
-    for r in filtered_records:
-        user_id = r.get('user_id')
-        # 如果有用户编号，只保留最新的一条记录（基于时间排序已经保证了顺序）
-        if user_id and user_id not in user_records:
-            user_records[user_id] = r
-        # 如果没有用户编号，保留该记录
-        elif not user_id:
-            user_records[f"no_id_{len(user_records)}"] = r
-    
-    # 从映射中获取唯一记录列表
-    unique_records = list(user_records.values())
-    
-    # 对唯一记录进行统计
-    for r in unique_records:
-        revenue = r.get('revenue', 0)
-        total += revenue
-        
-        # 对于分销分配类型的记录，使用assigned_at进行统计
-        if r.get('transaction_type') == 'distribution_assignment' and r.get('assigned_at'):
-            record_time = r.get('assigned_at')
-        else:
-            record_time = r.get('time', '')
-            
+        amount = float(r.get('amount', r.get('revenue', 0)) or 0)
+        total += amount
+        record_time = _record_time(r)
         if record_time.startswith(today):
-            daily += revenue
+            daily += amount
         if record_time.startswith(this_month):
-            monthly += revenue
+            monthly += amount
         if record_time.startswith(this_year):
-            yearly += revenue
+            yearly += amount
 
-    # 对去重后的记录按时间倒序排序
-    unique_records_sorted = sorted(unique_records, key=lambda x: x.get('assigned_at', x.get('time', '')), reverse=True)
-    
-    # 基于去重后的记录实现分页
-    total_records = len(unique_records_sorted)
+    total_records = len(records)
     start_index = (page - 1) * per_page
     end_index = start_index + per_page
-    paginated_records = unique_records_sorted[start_index:end_index]
-    
-    # 计算总页数
+    paginated_records = records[start_index:end_index]
     total_pages = max(1, (total_records + per_page - 1) // per_page)
 
     products = load_products()
@@ -1774,6 +1806,7 @@ def _approve_application(app_record):
     """
     users = load_users()
     new_accounts = []
+    now_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     for _ in range(app_record['count']):
         uname = gen_username_numeric(users, prefix="huiying", digits=6)
         pwd = gen_password_numeric(digits=6)
@@ -1785,27 +1818,45 @@ def _approve_application(app_record):
             'enabled': True,
             'source': 'agent',
             'product': app_record['product'],
-            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'created_at': now_ts,
             'last_login': None,
             'price': app_record['price'],
             'ip_address': '',
             'location': '',
-            'owner': app_record['agent'],
-            'forsale': True
         }
+        update_account_state(
+            users[uname],
+            owner=app_record['agent'],
+            manager=app_record['agent'],
+            status=ACCOUNT_STATUS_AGENT_STOCK,
+            sale_type=None,
+            sold_at=None,
+        )
         new_accounts.append({'username': uname, 'password': pwd})
     save_users(users)
+    total_amount = float(app_record['price'] * app_record['count'])
     records = load_ledger()
-    records.append({
-        'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'admin': session.get('admin'),
-        'agent': app_record['agent'],
-        'role': 'admin',
-        'product': app_record['product'],
-        'price': app_record['price'],
-        'count': app_record['count'],
-        'revenue': app_record['price'] * app_record['count']
-    })
+    record_transaction(
+        records,
+        transaction_type=TRANSACTION_ADMIN_TO_AGENT,
+        actor=session.get('admin'),
+        actor_role=ROLE_ADMIN,
+        amount=total_amount,
+        quantity=app_record['count'],
+        product=app_record['product'],
+        counterparty=app_record['agent'],
+    )
+    record_transaction(
+        records,
+        transaction_type=TRANSACTION_AGENT_PURCHASE,
+        actor=app_record['agent'],
+        actor_role=ROLE_AGENT,
+        amount=total_amount,
+        quantity=app_record['count'],
+        product=app_record['product'],
+        counterparty=session.get('admin'),
+        direction='out',
+    )
     save_ledger(records)
     app_record['status'] = 'approved'
 
@@ -2006,15 +2057,15 @@ def _aggregate_stats(users: dict, ledger: list, agent_view=False):
     # 新增：从台账计算售出数量
     sold_count_day = Counter()
     for r in ledger:
-        if r.get('role') == 'agent':
-            # 代理视图需要排除分销分配类型的记录，管理员视图不需要排除
+        role = r.get('actor_role') or r.get('role')
+        if role == 'agent' and r.get('direction', 'in') == 'in':
             if agent_view and r.get('transaction_type') == 'distribution_assignment':
                 continue
             dt = _parse_dt(r.get('time'))
             if dt:
                 day_key = dt.strftime("%Y-%m-%d")
-                rev_day[day_key] += float(r.get('revenue', 0) or 0)
-                sold_count_day[day_key] += int(r.get('count', 0) or 0)
+                rev_day[day_key] += float(r.get('amount', r.get('revenue', 0)) or 0)
+                sold_count_day[day_key] += int(r.get('quantity', r.get('count', 0)) or 0)
 
     new_day = Counter()
     for info in users.values():
@@ -2043,15 +2094,15 @@ def _aggregate_stats(users: dict, ledger: list, agent_view=False):
     
     # 收入：仍从（已过滤过的）ledger 聚合
     for r in ledger:
-        if r.get('role') == 'agent':
-            # 代理视图需要排除分销分配类型的记录，管理员视图不需要排除
+        role = r.get('actor_role') or r.get('role')
+        if role == 'agent' and r.get('direction', 'in') == 'in':
             if agent_view and r.get('transaction_type') == 'distribution_assignment':
                 continue
             dt = _parse_dt(r.get('time'))
             if dt:
                 month_key = dt.strftime("%Y-%m")
-                rev_mon[month_key] += float(r.get('revenue', 0) or 0)
-                sold_count_mon[month_key] += int(r.get('count', 0) or 0)
+                rev_mon[month_key] += float(r.get('amount', r.get('revenue', 0)) or 0)
+                sold_count_mon[month_key] += int(r.get('quantity', r.get('count', 0)) or 0)
     
     # 新增用户：保持原写法
     for info in users.values():
@@ -2246,99 +2297,34 @@ def assign_accounts():
         if not user_info:
             invalid_accounts.append(f'{username}: 用户不存在')
             continue
-            
-        # 检查账号是否属于当前代理
-        if user_info.get('owner') != current_user:
+
+        state = user_info.get('accounting', {})
+        if state.get('owner') != current_user:
             invalid_accounts.append(f'{username}: 不属于当前代理')
             continue
-            
-        # 检查账号是否为"总部直销"且"已售"
-        # 总部直销的判断逻辑：forsale为False且没有distribution_tag
-        is_headquarters_direct = (not user_info.get('forsale', False) and 
-                                 not user_info.get('distribution_tag', False))
-        
-        if not is_headquarters_direct:
-            invalid_accounts.append(f'{username}: 不是总部直销账号')
-            continue
-            
-        # 检查账号是否已售出（sold_at字段存在表示已售）
-        if not user_info.get('sold_at'):
+        if state.get('status') != ACCOUNT_STATUS_SOLD:
             invalid_accounts.append(f'{username}: 账号未售出')
             continue
-            
-        # 检查账号是否已经分配给其他分销商（防止重复分配）
-        if user_info.get('assigned_distributor') and user_info.get('assigned_distributor') != distributor_username:
-            invalid_accounts.append(f'{username}: 已分配给其他分销商')
+        sale_type = state.get('sale_type')
+        if sale_type not in (SALE_TYPE_DIRECT, None):
+            invalid_accounts.append(f'{username}: 仅支持总部直销账户分配')
             continue
-        
-        # 执行分配：更新账号的sale_type为"分销售出"，并设置assigned_distributor
-        user_info['sale_type'] = '分销售出'
-        user_info['assigned_distributor'] = distributor_username
+        current_manager = state.get('manager')
+        if current_manager and current_manager not in {current_user, distributor_username}:
+            invalid_accounts.append(f'{username}: 已由其他分销管理')
+            continue
+
+        update_account_state(
+            user_info,
+            manager=distributor_username,
+            sale_type=sale_type or SALE_TYPE_DIRECT,
+        )
         user_info['assigned_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        # 为分销商设置专用的状态字段 - 分配的账号都是已售状态
-        user_info['distributor_forsale'] = False  # 对分销商来说是已售状态（不是库存）
-        user_info['distributor_sold'] = True      # 分销商已售出状态
-        
         assigned_count += 1
-    
-    # 保存用户数据
-    save_users(users)
-    
-    # 添加台账记录 - 使用原始售卖时间戳，基于用户编号防止重复记录
-    if assigned_count > 0:
-        records = load_ledger()
-        
-        # 为每个成功分配的账号添加台账记录
-        for username in account_usernames:
-            user_info = users.get(username)
-            if not user_info or username in [acc.split(':')[0] for acc in invalid_accounts]:
-                continue
-                
-            # 使用原始售卖时间戳，而不是分配时间
-            original_sold_time = user_info.get('sold_at')
-            if not original_sold_time:
-                continue
-                
-            # 获取用户编号，用于防止重复记录
-            user_id = user_info.get('user_id')
-            if not user_id:
-                continue
-                
-            # 检查该用户编号是否已经被分配记录过（防止重复统计）
-            already_assigned = any(
-                record.get('transaction_type') == 'distribution_assignment' and 
-                record.get('user_id') == user_id
-                for record in records
-            )
-            
-            if already_assigned:
-                continue  # 跳过已经分配记录过的账号
-                
-            # 获取产品信息和价格
-            product_name = user_info.get('product', '未知产品')
-            products = load_products()
-            product_price = products.get(product_name, {}).get('price', 0)
-            
-            # 添加分销台账记录，使用原始售卖时间
-            records.append({
-                'time': original_sold_time,  # 使用原始售卖时间戳
-                'admin': current_user,
-                'role': 'agent',
-                'product': product_name,
-                'price': product_price,
-                'count': 1,
-                'revenue': product_price,
-                'transaction_type': 'distribution_assignment',
-                'distributor': distributor_username,
-                'user_id': user_id,  # 记录用户编号，用于防重复
-                'username': username,  # 记录用户名
-                'description': f'分配给分销商 {distributor_username}',
-                'assigned_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 记录分配时间作为备注
-            })
-        
-        save_ledger(records)
-    
+
+    if assigned_count:
+        save_users(users)
+
     if invalid_accounts:
         message = f'成功分配 {assigned_count} 个账号。以下账号无法分配：' + '; '.join(invalid_accounts)
     else:
@@ -2377,7 +2363,12 @@ def distributor_management():
     for username, user_info in users.items():
         if user_info.get('is_distributor') and user_info.get('distributor_owner') == current_user:
             # 计算该分销代理管理的用户数量（通过assigned_distributor字段）
-            managed_count = sum(1 for u in users.values() if u.get('assigned_distributor') == username)
+            managed_count = sum(
+                1
+                for u in users.values()
+                if u.get('accounting', {}).get('manager') == username
+                and u.get('accounting', {}).get('status') == ACCOUNT_STATUS_SOLD
+            )
             
             all_distributors.append({
                 'username': username,
@@ -2510,7 +2501,10 @@ def get_distributor_managed_users(username):
     # 获取该分销代理管理的用户
     managed_users = []
     for user_username, user_info in users.items():
-        if user_info.get('owner') == username:
+        state = user_info.get('accounting', {})
+        if not state:
+            continue
+        if state.get('owner') == username or state.get('manager') == username:
             managed_users.append({
                 'username': user_username,
                 'nickname': user_info.get('nickname'),
@@ -2531,12 +2525,12 @@ def get_available_accounts_count():
     users = load_users()
     
     # 统计当前代理名下的真正库存账户数量
-    available_count = 0
-    for username, user_info in users.items():
-        if (user_info.get('owner') == current_agent and 
-            user_info.get('forsale', True) and  # forsale为True表示可售（未售）
-            not user_info.get('assigned_distributor')):  # 且未分配给分销商
-            available_count += 1
+    available_count = sum(
+        1
+        for user_info in users.values()
+        if user_info.get('accounting', {}).get('owner') == current_agent
+        and user_info.get('accounting', {}).get('status') == ACCOUNT_STATUS_AGENT_STOCK
+    )
     
     return jsonify({'success': True, 'count': available_count})
 
@@ -2674,47 +2668,53 @@ def distributor_users():
     page = int(request.args.get('page', 1))
     per_page = 10  # 每页10个用户
     
-    # 过滤出当前分销商的用户（通过assigned_distributor字段）
+    # 过滤出当前分销商的用户（库存或已托管）
     my_users = []
     for username, user_info in users.items():
-        if user_info.get('assigned_distributor') == current_distributor:
-            # 添加分销商专用的用户类型判断
-            user_type = get_distributor_user_type(user_info)
-            user_info['user_type'] = user_type
-            
-            # 应用搜索过滤
-            if search_username and search_username not in username.lower():
-                continue
-            if search_nickname and search_nickname not in user_info.get('nickname', '').lower():
-                continue
-            
-            # 应用分销状态过滤
-            if sale_filter == 'sold' and user_type != 'sold':
-                continue
-            if sale_filter == 'unsold' and user_type != 'unsold':
-                continue
-            
-            # 应用日期过滤
-            created_at = user_info.get('created_at', '')
-            if start_date and created_at and created_at < start_date:
-                continue
-            if end_date and created_at and created_at > end_date:
-                continue
-            
-            my_users.append({
-                'username': username,
-                **user_info
-            })
+        state = user_info.get('accounting', {})
+        if not state:
+            continue
+
+        owns_inventory = (
+            state.get('owner') == current_distributor
+            and state.get('status') in {ACCOUNT_STATUS_DISTRIBUTOR_STOCK, ACCOUNT_STATUS_SOLD}
+        )
+        manages_account = (
+            state.get('manager') == current_distributor
+            and state.get('status') == ACCOUNT_STATUS_SOLD
+        )
+
+        if not owns_inventory and not manages_account:
+            continue
+
+        user_type = get_distributor_user_type(user_info, current_distributor)
+        user_info['user_type'] = user_type
+
+        if sale_filter == 'sold' and user_type != 'sold':
+            continue
+        if sale_filter == 'unsold' and user_type != 'unsold':
+            continue
+
+        if search_username and search_username not in username.lower():
+            continue
+        if search_nickname and search_nickname not in user_info.get('nickname', '').lower():
+            continue
+
+        created_at = user_info.get('created_at', '')
+        if start_date and created_at and created_at < start_date:
+            continue
+        if end_date and created_at and created_at > end_date:
+            continue
+
+        my_users.append({
+            'username': username,
+            **user_info
+        })
     
     # 排序：优先显示未售账户，然后按创建时间排序
     def sort_key(user):
-        # 未售账户优先（distributor_forsale=True 排在前面）
-        is_unsold = user.get('distributor_forsale', False)
+        is_unsold = user.get('user_type') == 'unsold'
         created_at = user.get('created_at', '')
-        
-        # 返回元组：(是否已售, 创建时间)
-        # 未售账户 is_unsold=True，取反后为False，排在前面
-        # 已售账户 is_unsold=False，取反后为True，排在后面
         return (not is_unsold, created_at)
     
     if sort_order == 'asc':
@@ -2724,8 +2724,9 @@ def distributor_users():
     
     # 统计数据
     total_users = len(my_users)
-    unsold_users = sum(1 for user in my_users if user.get('distributor_forsale', False))
-    sold_users = sum(1 for user in my_users if user.get('distributor_sold', False))
+    unsold_users = sum(1 for user in my_users if user.get('user_type') == 'unsold')
+    sold_users = sum(1 for user in my_users if user.get('user_type') == 'sold')
+    managed_users = sum(1 for user in my_users if user.get('user_type') == 'managed')
     
     # 分页计算
     total_pages = (total_users + per_page - 1) // per_page  # 向上取整
@@ -2747,24 +2748,31 @@ def distributor_users():
         'end_record': min(end_index, total_users)
     }
     
-    return render_template('distributor_users.html', 
+    return render_template('distributor_users.html',
                          users=paginated_users,
                          total_users=total_users,
                          unsold_users=unsold_users,
                          sold_users=sold_users,
+                         managed_users=managed_users,
                          pagination=pagination)
 
 
-def get_distributor_user_type(user_info):
-    """
-    获取分销商视角下的用户类型
-    """
-    if user_info.get('distributor_sold', False):
-        return 'sold'  # 已售出
-    elif user_info.get('distributor_forsale', False):
-        return 'unsold'  # 未售出（库存）
-    else:
-        return 'unknown'  # 未知状态
+def get_distributor_user_type(user_info, distributor):
+    """获取分销商视角下的用户类型。"""
+
+    state = user_info.get('accounting', {})
+    if not state:
+        return 'unknown'
+
+    if state.get('owner') == distributor and state.get('status') == ACCOUNT_STATUS_DISTRIBUTOR_STOCK:
+        return 'unsold'
+
+    if state.get('status') == ACCOUNT_STATUS_SOLD and state.get('manager') == distributor:
+        if state.get('sale_type') == SALE_TYPE_DISTRIBUTION and state.get('owner') == distributor:
+            return 'sold'
+        return 'managed'
+
+    return 'unknown'
 
 
 @app.route('/distributor/mark-sold', methods=['POST'])
@@ -2779,31 +2787,34 @@ def distributor_mark_sold():
     users = load_users()
     current_distributor = session['distributor']
     
-    if username in users and users[username].get('assigned_distributor') == current_distributor:
-        user_info = users[username]
-        
-        # 更新用户状态
-        users[username]['distributor_sold'] = True
-        users[username]['distributor_forsale'] = False
-        save_users(users)
-        
-        # 记录到分销商台账
-        records = load_ledger()
-        from datetime import datetime
-        records.append({
-            'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'admin': current_distributor,
-            'role': 'distributor',  # 正确设置为分销商角色
-            'product': user_info.get('product', '未知产品'),
-            'price': user_info.get('price', 0),
-            'count': 1,
-            'revenue': user_info.get('price', 0),
-            'username': username,
-            'transaction_type': 'distributor_sale',
-            'description': f'分销商售出账号: {username}'
-        })
-        save_ledger(records)
-        
+    if username in users:
+        state = users[username].get('accounting', {})
+        if state.get('owner') == current_distributor and state.get('status') == ACCOUNT_STATUS_DISTRIBUTOR_STOCK:
+            sold_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            update_account_state(
+                users[username],
+                owner=current_distributor,
+                manager=current_distributor,
+                status=ACCOUNT_STATUS_SOLD,
+                sale_type=SALE_TYPE_DISTRIBUTION,
+                sold_at=sold_time,
+            )
+            save_users(users)
+
+            records = load_ledger()
+            record_transaction(
+                records,
+                transaction_type=TRANSACTION_DISTRIBUTOR_SALE,
+                actor=current_distributor,
+                actor_role=ROLE_DISTRIBUTOR,
+                amount=float(users[username].get('price', 0) or 0),
+                quantity=1,
+                product=users[username].get('product', '未知产品'),
+                account_username=username,
+                sale_type=SALE_TYPE_DISTRIBUTION,
+            )
+            save_ledger(records)
+
         return jsonify({'success': True})
     
     return jsonify({'success': False}), 400
@@ -2822,16 +2833,24 @@ def distributor_mark_unsold():
     users = load_users()
     current_distributor = session['distributor']
     
-    if username in users and users[username].get('assigned_distributor') == current_distributor:
-        # 检查是否已经有台账记录（已售出的用户不能再标记为未售）
-        if users[username].get('sold_at'):
-            return jsonify({'success': False, 'message': '该用户已售出并记录到台账，不能标记为未售'}), 400
-            
-        users[username]['distributor_sold'] = False
-        users[username]['distributor_forsale'] = True
-        save_users(users)
-        return jsonify({'success': True})
-    
+    if username in users:
+        state = users[username].get('accounting', {})
+        if (
+            state.get('owner') == current_distributor
+            and state.get('status') == ACCOUNT_STATUS_SOLD
+            and state.get('sale_type') == SALE_TYPE_DISTRIBUTION
+        ):
+            update_account_state(
+                users[username],
+                owner=current_distributor,
+                manager=current_distributor,
+                status=ACCOUNT_STATUS_DISTRIBUTOR_STOCK,
+                sale_type=None,
+                sold_at=None,
+            )
+            save_users(users)
+            return jsonify({'success': True})
+
     return jsonify({'success': False}), 400
 
 
@@ -2848,7 +2867,18 @@ def distributor_export_users():
     # 过滤出当前分销商的用户
     selected_users = {}
     for name in names:
-        if name in users and users[name].get('assigned_distributor') == current_distributor:
+        state = users.get(name, {}).get('accounting', {})
+        if not state:
+            continue
+        owns_inventory = (
+            state.get('owner') == current_distributor
+            and state.get('status') in {ACCOUNT_STATUS_DISTRIBUTOR_STOCK, ACCOUNT_STATUS_SOLD}
+        )
+        manages_account = (
+            state.get('manager') == current_distributor
+            and state.get('status') == ACCOUNT_STATUS_SOLD
+        )
+        if owns_inventory or manages_account:
             selected_users[name] = users[name]
     
     if not selected_users:
@@ -2864,12 +2894,17 @@ def distributor_export_users():
     
     # 添加用户数据
     for username, info in selected_users.items():
+        user_type = get_distributor_user_type(info, current_distributor)
         ws.append([
             username,
             info.get('password', ''),
             info.get('nickname', ''),
             info.get('product', ''),
-            '已售出' if info.get('distributor_sold') else '库存',
+            {
+                'sold': '已售出',
+                'unsold': '库存',
+                'managed': '托管客户',
+            }.get(user_type, '未知'),
             info.get('created_at', ''),
             info.get('remark', '')
         ])
@@ -2906,7 +2941,8 @@ def distributor_ledger():
     # 筛选出当前分销商的销售记录
     records = [
         r for r in load_ledger()
-        if r.get('admin') == current_distributor and r.get('role') == 'distributor'
+        if (r.get('actor') or r.get('admin')) == current_distributor
+        and (r.get('actor_role') or r.get('role')) == 'distributor'
     ]
     if product_filter:
         records = [r for r in records if r.get('product') == product_filter]
@@ -2932,22 +2968,21 @@ def distributor_ledger():
     filtered_records.sort(key=lambda x: x.get('time', ''), reverse=True)
 
     # 统计计算
-    daily = 0
-    monthly = 0
-    yearly = 0
-    total = 0
-    
+    daily = monthly = yearly = total = 0.0
+
     for r in filtered_records:
-        revenue = r.get('revenue', 0)
-        total += revenue
+        if r.get('direction', 'in') != 'in':
+            continue
+        amount = float(r.get('amount', r.get('revenue', 0)) or 0)
+        total += amount
         record_time = r.get('time', '')
-        
+
         if record_time.startswith(today):
-            daily += revenue
+            daily += amount
         if record_time.startswith(this_month):
-            monthly += revenue
+            monthly += amount
         if record_time.startswith(this_year):
-            yearly += revenue
+            yearly += amount
 
     # 实现分页
     total_records = len(filtered_records)
@@ -2991,7 +3026,8 @@ def update_user_field():
     if username not in users:
         return jsonify({'success': False, 'message': '用户不存在'}), 404
     
-    if users[username].get('assigned_distributor') != current_distributor:
+    state = users[username].get('accounting', {})
+    if state.get('owner') != current_distributor and state.get('manager') != current_distributor:
         return jsonify({'success': False, 'message': '无权限修改此用户'}), 403
     
     # 更新字段
@@ -3023,10 +3059,12 @@ def distribution_approval():
     
     # 计算可用账户数量（真正的库存账户：forsale=True且未分配给分销商）
     users = load_users()
-    available_accounts = sum(1 for user in users.values() 
-                           if user.get('owner') == current_agent and 
-                              user.get('forsale', False) and 
-                              not user.get('assigned_distributor'))
+    available_accounts = sum(
+        1
+        for user in users.values()
+        if user.get('accounting', {}).get('owner') == current_agent
+        and user.get('accounting', {}).get('status') == ACCOUNT_STATUS_AGENT_STOCK
+    )
     
     return render_template('distribution_approval.html', 
                          requests=agent_requests,
@@ -3056,8 +3094,12 @@ def approve_distribution_request(request_id):
     
     # 检查库存
     users = load_users()
-    available_accounts = [username for username, user in users.items() 
-                         if user.get('owner') == current_agent and user.get('forsale', True)]
+    available_accounts = [
+        username
+        for username, user in users.items()
+        if user.get('accounting', {}).get('owner') == current_agent
+        and user.get('accounting', {}).get('status') == ACCOUNT_STATUS_AGENT_STOCK
+    ]
     
     requested_quantity = request_record.get('quantity', 0)
     
@@ -3072,18 +3114,18 @@ def approve_distribution_request(request_id):
     selected_accounts = random.sample(available_accounts, requested_quantity)
     distributor = request_record.get('distributor')
     
-    # 更新账户信息
+    sale_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     for username in selected_accounts:
-        # 保持owner为代理，不转移所有权
-        # users[username]['owner'] = distributor  # 注释掉这行，保持代理所有权
-        users[username]['forsale'] = False  # 对代理来说已售出
-        users[username]['sold_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        users[username]['distribution_tag'] = True
-        users[username]['assigned_distributor'] = distributor  # 记录分配给哪个分销商
-        # 为分销商添加独立的状态字段
-        users[username]['distributor_forsale'] = True  # 对分销商来说是未售状态
-        users[username]['distributor_sold'] = False    # 分销商尚未售出
-    
+        update_account_state(
+            users[username],
+            owner=distributor,
+            manager=distributor,
+            status=ACCOUNT_STATUS_DISTRIBUTOR_STOCK,
+            sale_type=None,
+            sold_at=None,
+        )
+        users[username]['transferred_at'] = sale_time
+
     save_users(users)
     
     # 更新申请状态
@@ -3096,27 +3138,33 @@ def approve_distribution_request(request_id):
     # 添加台账记录 - 记录分销售出
     records = load_ledger()
     product_name = request_record.get('product', '未知产品')
-    
-    # 获取产品价格
+
     products = load_products()
-    product_price = products.get(product_name, {}).get('price', 0)
-    
-    # 记录代理的分销售出
-    records.append({
-        'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'admin': current_agent,
-        'role': 'agent',
-        'product': product_name,
-        'price': product_price,
-        'count': requested_quantity,
-        'revenue': product_price * requested_quantity,
-        'transaction_type': 'distribution_sale',
-        'distributor': distributor,
-        'description': f'分销售出给 {distributor}',
-        # 为每个分配的账号添加唯一标识，用于后续验证
-        'user_ids': [user_info.get('user_id') for username in selected_accounts if (user_info := users.get(username))]
-    })
-    
+    product_price = float(products.get(product_name, {}).get('price', 0) or 0)
+    total_amount = product_price * requested_quantity
+
+    record_transaction(
+        records,
+        transaction_type=TRANSACTION_AGENT_TO_DISTRIBUTOR,
+        actor=current_agent,
+        actor_role=ROLE_AGENT,
+        amount=total_amount,
+        quantity=requested_quantity,
+        product=product_name,
+        counterparty=distributor,
+    )
+    record_transaction(
+        records,
+        transaction_type=TRANSACTION_AGENT_TO_DISTRIBUTOR,
+        actor=distributor,
+        actor_role=ROLE_DISTRIBUTOR,
+        amount=total_amount,
+        quantity=requested_quantity,
+        product=product_name,
+        counterparty=current_agent,
+        direction='out',
+    )
+
     save_ledger(records)
     
     return jsonify({'success': True, 'message': '审批通过，账户已分配'})
