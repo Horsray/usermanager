@@ -1,0 +1,317 @@
+{% extends "layout.html" %}
+
+{% block title %}分销进货审批{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+          <i class="fas fa-clipboard-check me-2"></i>分销进货审批
+        </h2>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-primary" onclick="refreshApprovals()">
+            <i class="fas fa-sync-alt me-2"></i>刷新
+          </button>
+        </div>
+      </div>
+
+      <!-- 统计卡片 -->
+      <div class="row mb-4">
+        <div class="col-md-3">
+          <div class="card bg-warning text-white">
+            <div class="card-body">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <h4 class="card-title">{{ pending_count or 0 }}</h4>
+                  <p class="card-text">待审批申请</p>
+                </div>
+                <div class="align-self-center">
+                  <i class="fas fa-clock fa-2x"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-success text-white">
+            <div class="card-body">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <h4 class="card-title">{{ approved_count or 0 }}</h4>
+                  <p class="card-text">已审批通过</p>
+                </div>
+                <div class="align-self-center">
+                  <i class="fas fa-check fa-2x"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-danger text-white">
+            <div class="card-body">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <h4 class="card-title">{{ rejected_count or 0 }}</h4>
+                  <p class="card-text">已拒绝</p>
+                </div>
+                <div class="align-self-center">
+                  <i class="fas fa-times fa-2x"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-info text-white">
+            <div class="card-body">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <h4 class="card-title">{{ available_accounts or 0 }}</h4>
+                  <p class="card-text">库存账户</p>
+                </div>
+                <div class="align-self-center">
+                  <i class="fas fa-user-friends fa-2x"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 审批列表 -->
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">
+            <i class="fas fa-list me-2"></i>进货审批列表
+          </h5>
+        </div>
+        <div class="card-body">
+          {% if requests and requests|length > 0 %}
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th>申请ID</th>
+                  <th>申请人</th>
+                  <th>产品名称</th>
+                  <th>进货数量</th>
+                  <th>申请时间</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for request in requests %}
+                <tr>
+                  <td><strong>#{{ request.id }}</strong></td>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <i class="fas fa-user-circle me-2 text-primary"></i>
+                      <div>
+                        <div class="fw-bold">{{ request.distributor }}</div>
+                        <small class="text-muted">分销代理</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="badge bg-secondary">{{ request.product }}</span>
+                  </td>
+                  <td>
+                    <span class="fw-bold text-primary">{{ request.quantity }}</span> 个
+                  </td>
+                  <td>
+                    <small>{{ request.created_at }}</small>
+                  </td>
+                  <td>
+                    {% if request.status == 'pending' %}
+                      <span class="badge bg-warning">待审批</span>
+                    {% elif request.status == 'approved' %}
+                      <span class="badge bg-success">已通过</span>
+                    {% elif request.status == 'rejected' %}
+                      <span class="badge bg-danger">已拒绝</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if request.status == 'pending' %}
+                    <div class="btn-group" role="group">
+                      <button type="button" class="btn btn-success btn-sm" 
+                              onclick="approveRequest('{{ request.id }}', '{{ request.distributor }}', {{ request.quantity }})">
+                        <i class="fas fa-check me-1"></i>同意
+                      </button>
+                      <button type="button" class="btn btn-danger btn-sm" 
+                              onclick="rejectRequest('{{ request.id }}')">
+                        <i class="fas fa-times me-1"></i>拒绝
+                      </button>
+                    </div>
+                    {% else %}
+                    <span class="text-muted">已处理</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center py-5">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">暂无进货审批申请</h5>
+            <p class="text-muted">当有分销商提交进货申请时，会在这里显示</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 审批确认模态框 -->
+<div class="modal fade" id="approvalModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-check-circle me-2"></i>确认审批
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info">
+          <i class="fas fa-info-circle me-2"></i>
+          <strong>审批信息确认</strong>
+        </div>
+        <div class="row">
+          <div class="col-sm-4"><strong>申请人：</strong></div>
+          <div class="col-sm-8" id="modalApplicant">-</div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-sm-4"><strong>申请数量：</strong></div>
+          <div class="col-sm-8" id="modalQuantity">-</div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-sm-4"><strong>可用库存：</strong></div>
+          <div class="col-sm-8" id="modalAvailable">-</div>
+        </div>
+        <div id="insufficientStock" class="alert alert-warning mt-3" style="display: none;">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <strong>存货不足，请先进行采购</strong>
+          <div>差额：<span id="shortage">0</span> 个</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-success" id="confirmApproval">
+          <i class="fas fa-check me-2"></i>确认同意
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentApprovalId = null;
+let currentApplicant = null;
+let currentQuantity = 0;
+
+// 刷新审批列表
+function refreshApprovals() {
+    location.reload();
+}
+
+// 同意申请
+function approveRequest(approvalId, applicant, quantity) {
+    currentApprovalId = approvalId;
+    currentApplicant = applicant;
+    currentQuantity = quantity;
+    
+    // 获取当前可用库存
+    fetch('/api/available-accounts-count')
+        .then(response => response.json())
+        .then(data => {
+            const availableCount = data.count || 0;
+            
+            document.getElementById('modalApplicant').textContent = applicant;
+            document.getElementById('modalQuantity').textContent = quantity + ' 个';
+            document.getElementById('modalAvailable').textContent = availableCount + ' 个';
+            
+            const insufficientStock = document.getElementById('insufficientStock');
+            const confirmButton = document.getElementById('confirmApproval');
+            
+            if (availableCount < quantity) {
+                // 库存不足
+                const shortage = quantity - availableCount;
+                document.getElementById('shortage').textContent = shortage;
+                insufficientStock.style.display = 'block';
+                confirmButton.disabled = true;
+                confirmButton.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>库存不足';
+            } else {
+                // 库存充足
+                insufficientStock.style.display = 'none';
+                confirmButton.disabled = false;
+                confirmButton.innerHTML = '<i class="fas fa-check me-2"></i>确认同意';
+            }
+            
+            const modal = new bootstrap.Modal(document.getElementById('approvalModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('获取库存信息失败');
+        });
+}
+
+// 拒绝申请
+function rejectRequest(approvalId) {
+    if (confirm('确定要拒绝这个进货申请吗？')) {
+        fetch(`/distribution-approval/${approvalId}/reject`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('申请已拒绝');
+                location.reload();
+            } else {
+                alert('拒绝失败：' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('拒绝申请时发生错误');
+        });
+    }
+}
+
+// 确认审批
+document.getElementById('confirmApproval').addEventListener('click', function() {
+    if (currentApprovalId && currentApplicant && currentQuantity > 0) {
+        fetch(`/distribution-approval/${currentApprovalId}/approve`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('审批成功！已为申请人分配 ' + currentQuantity + ' 个账户');
+                bootstrap.Modal.getInstance(document.getElementById('approvalModal')).hide();
+                location.reload();
+            } else {
+                alert('审批失败：' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('审批时发生错误');
+        });
+    }
+});
+</script>
+{% endblock %}

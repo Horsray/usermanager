@@ -1,0 +1,581 @@
+{
+    "apps": [
+        {
+            "id": "eedb61d96c9d",
+            "agent": "lipeidong",
+            "count": 1,
+            "price": 0.0,
+            "product": "绘影新版AIGC",
+            "status": "approved",
+            "created_at": "2025-07-28 23:09:12"
+        },
+        {
+            "id": "039bb5f75b32",
+            "agent": "peidong",
+            "count": 1,
+            "price": 398.0,
+            "product": "绘影新版AIGC",
+            "status": "rejected",
+            "created_at": "2025-07-31 22:09:29"
+        },
+        {
+            "id": "99898a05a1c2",
+            "agent": "yiyang",
+            "count": 1,
+            "price": 0.0,
+            "product": "绘影AI摄影2.5",
+            "status": "rejected",
+            "created_at": "2025-08-08 17:10:17"
+        },
+        {
+            "id": "1de744259b94",
+            "agent": "peidong",
+            "count": 1,
+            "price": 0.0,
+            "product": "绘影AI摄影2.5",
+            "status": "approved",
+            "created_at": "2025-08-12 17:18:03"
+        },
+        {
+            "id": "7744a06818b3",
+            "agent": "peidong",
+            "count": 1,
+            "price": 0.0,
+            "product": "绘影AI摄影2.5",
+            "status": "approved",
+            "created_at": "2025-08-12 18:57:04"
+        },
+        {
+            "id": "43df99c2fd2a",
+            "agent": "yiyang",
+            "count": 1,
+            "price": 298.0,
+            "product": "绘影AI摄影2.5",
+            "status": "approved",
+            "created_at": "2025-08-14 12:57:14"
+        },
+        {
+            "id": "b80a0b188e0f",
+            "agent": "yiyang",
+            "count": 1,
+            "price": 298.0,
+            "product": "绘影AI摄影2.5",
+            "status": "approved",
+            "created_at": "2025-08-14 23:14:19"
+        },
+        {
+            "id": "3f734c7782c7",
+            "agent": "yiyang",
+            "count": 10,
+            "price": 298.0,
+            "product": "绘影AI摄影2.5",
+            "status": "approved",
+            "created_at": "2025-08-14 23:16:33"
+        },
+        {
+            "id": "baffd71eb249",
+            "agent": "xiangyi",
+            "count": 1,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "rejected",
+            "created_at": "2025-08-19 04:18:52"
+        },
+        {
+            "id": "4e22d55b1b62",
+            "agent": "xiangyi",
+            "count": 1,
+            "price": 0.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-19 04:19:38"
+        },
+        {
+            "id": "3cdc883cf37f",
+            "agent": "xiangyi",
+            "count": 7,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-19 16:47:55"
+        },
+        {
+            "id": "39b9397735a8",
+            "agent": "xiangyi",
+            "count": 3,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-19 17:03:28"
+        },
+        {
+            "id": "35d80ebe0add",
+            "agent": "peidong",
+            "count": 1,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-19 21:59:26"
+        },
+        {
+            "id": "994c4b782fca",
+            "agent": "xiangyi",
+            "count": 5,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-21 12:04:03"
+        },
+        {
+            "id": "d6b417cadf9d",
+            "agent": "peidong",
+            "count": 1,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-21 13:09:39"
+        },
+        {
+            "id": "e9775c061120",
+            "agent": "xiangyi",
+            "count": 30,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-21 22:15:24"
+        },
+        {
+            "id": "eda116a3a293",
+            "agent": "xiangyi",
+            "count": 50,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "rejected",
+            "created_at": "2025-08-22 11:28:59"
+        },
+        {
+            "id": "5ed31ed38fdd",
+            "agent": "xiangyi",
+            "count": 50,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-22 11:29:11"
+        },
+        {
+            "id": "9abbf55b23bb",
+            "agent": "yiyang",
+            "count": 10,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "rejected",
+            "created_at": "2025-08-22 21:13:42"
+        },
+        {
+            "id": "c015b542c25a",
+            "agent": "xiangyi",
+            "count": 50,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-22 21:31:52"
+        },
+        {
+            "id": "eff267702268",
+            "agent": "xiangyi",
+            "count": 50,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-23 16:34:16"
+        },
+        {
+            "id": "c1a0957112a1",
+            "agent": "yiyang",
+            "count": 10,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-24 12:13:37"
+        },
+        {
+            "id": "0ea02939d750",
+            "agent": "xiangyi",
+            "count": 70,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-24 12:24:47"
+        },
+        {
+            "id": "155a0da3fbee",
+            "agent": "xiangyi",
+            "count": 70,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-24 13:36:30"
+        },
+        {
+            "id": "b2389171c219",
+            "agent": "peidong",
+            "count": 1,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-24 22:17:50"
+        },
+        {
+            "id": "3c98a95e9e28",
+            "agent": "peidong",
+            "count": 1,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-25 19:28:44"
+        },
+        {
+            "id": "d0079331cd7e",
+            "agent": "xiangyi",
+            "count": 100,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-25 22:38:40"
+        },
+        {
+            "id": "f4b315292db9",
+            "agent": "peidong",
+            "count": 1,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-26 17:34:50"
+        },
+        {
+            "id": "a96d037ac690",
+            "agent": "lpd",
+            "count": 1,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-27 17:29:52"
+        },
+        {
+            "id": "ee140e403ff8",
+            "agent": "peidong",
+            "count": 1,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-27 17:46:52"
+        },
+        {
+            "id": "cbf23afa5176",
+            "agent": "bukeshuo",
+            "count": 20,
+            "price": 129.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-27 21:26:05"
+        },
+        {
+            "id": "a118e2d44de7",
+            "agent": "xiangyi",
+            "count": 100,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-08-28 08:33:11"
+        },
+        {
+            "id": "f13a260b2b95",
+            "agent": "peidong",
+            "count": 1,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-29 16:08:35"
+        },
+        {
+            "id": "0cdc9cd126ea",
+            "agent": "peidong",
+            "count": 5,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-08-31 00:03:15"
+        },
+        {
+            "id": "7ff5b84ae186",
+            "agent": "xiangyi",
+            "count": 100,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-09-01 12:49:45"
+        },
+        {
+            "id": "1194258a60b4",
+            "agent": "huiyinga6c2d",
+            "count": 10,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-01 15:40:38"
+        },
+        {
+            "id": "292196ed1d1e",
+            "agent": "15289377772",
+            "count": 10,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-01 15:46:38"
+        },
+        {
+            "id": "3852697e8a80",
+            "agent": "peidong",
+            "count": 5,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-06 11:33:35"
+        },
+        {
+            "id": "8baa30421c8f",
+            "agent": "peidong",
+            "count": 5,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-06 11:33:59"
+        },
+        {
+            "id": "b42211b80403",
+            "agent": "xiangyi",
+            "count": 100,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-09-08 10:51:24"
+        },
+        {
+            "id": "a8760a6845c5",
+            "agent": "15289377772",
+            "count": 5,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-10 14:34:05"
+        },
+        {
+            "id": "6c903626cc13",
+            "agent": "xiangyi",
+            "count": 100,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-09-10 21:21:07"
+        },
+        {
+            "id": "eb0ad0208c5e",
+            "agent": "15289377772",
+            "count": 10,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-11 19:03:45"
+        },
+        {
+            "id": "4a1a9b3febee",
+            "agent": "xiangyi",
+            "count": 100,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-09-15 09:45:46"
+        },
+        {
+            "id": "1ed783e8eea2",
+            "agent": "peidong",
+            "count": 5,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-17 11:31:43"
+        },
+        {
+            "id": "dfd276cbc400",
+            "agent": "xiangyi",
+            "count": 100,
+            "price": 298.0,
+            "product": "相一古风ai版",
+            "status": "approved",
+            "created_at": "2025-09-18 16:52:07"
+        },
+        {
+            "id": "06308b3984c2",
+            "agent": "xiangyi",
+            "count": 100,
+            "price": 298.0,
+            "product": "花生国风AI",
+            "status": "approved",
+            "created_at": "2025-09-21 17:14:27"
+        },
+        {
+            "id": "c088b6fc3474",
+            "agent": "youyou",
+            "count": 3,
+            "price": 99.0,
+            "product": "花生国风AI",
+            "status": "approved",
+            "created_at": "2025-09-22 13:49:57"
+        },
+        {
+            "id": "6a6d8cb38826",
+            "agent": "youyou",
+            "count": 3,
+            "price": 100.0,
+            "product": "花生国风AI",
+            "status": "approved",
+            "created_at": "2025-09-24 23:28:50"
+        },
+        {
+            "id": "91fdff5ee10e",
+            "agent": "youyou",
+            "count": 1,
+            "price": 298.0,
+            "product": "花生国风AI",
+            "status": "rejected",
+            "created_at": "2025-09-24 23:28:58"
+        },
+        {
+            "id": "26fd2757483b",
+            "agent": "peidong",
+            "count": 5,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-25 14:37:52"
+        },
+        {
+            "id": "f241b3ae1493",
+            "agent": "15289377772",
+            "count": 10,
+            "price": 298.0,
+            "product": "花生国风AI",
+            "status": "approved",
+            "created_at": "2025-09-25 18:20:26"
+        },
+        {
+            "id": "f2949818e8f6",
+            "agent": "you",
+            "count": 1,
+            "price": 100.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-25 19:23:41"
+        },
+        {
+            "id": "05a70586568f",
+            "agent": "you",
+            "count": 2,
+            "price": 100.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-26 12:27:31"
+        },
+        {
+            "id": "3fd6b2dcd624",
+            "agent": "xiangyi",
+            "count": 100,
+            "price": 298.0,
+            "product": "花生国风AI",
+            "status": "approved",
+            "created_at": "2025-09-26 19:55:53"
+        },
+        {
+            "id": "b87ce8f88b80",
+            "agent": "peidong",
+            "count": 5,
+            "price": 298.0,
+            "product": "花生国风AI",
+            "status": "rejected",
+            "created_at": "2025-09-27 23:29:31"
+        },
+        {
+            "id": "4b4899e486c5",
+            "agent": "peidong",
+            "count": 5,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-27 23:32:49"
+        },
+        {
+            "id": "7823edf313af",
+            "agent": "youyou",
+            "count": 5,
+            "price": 100.0,
+            "product": "花生国风AI",
+            "status": "approved",
+            "created_at": "2025-09-28 22:56:28"
+        },
+        {
+            "id": "228cefe53eb4",
+            "agent": "peidong",
+            "count": 5,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-29 07:15:41"
+        },
+        {
+            "id": "9ffd7e6fe81c",
+            "agent": "peidong",
+            "count": 5,
+            "price": 298.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-29 15:33:45"
+        },
+        {
+            "id": "b6280bd0a328",
+            "agent": "xiangyi",
+            "count": 100,
+            "price": 298.0,
+            "product": "花生国风AI",
+            "status": "approved",
+            "created_at": "2025-09-29 15:57:39"
+        },
+        {
+            "id": "8c08ec3c65bc",
+            "agent": "youyou",
+            "count": 2,
+            "price": 100.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-29 21:06:10"
+        },
+        {
+            "id": "b2ce5848d6b9",
+            "agent": "you",
+            "count": 2,
+            "price": 100.0,
+            "product": "绘影AI摄影",
+            "status": "approved",
+            "created_at": "2025-09-29 21:26:10"
+        },
+        {
+            "id": "ab65e4a5f627",
+            "agent": "测试代理",
+            "count": 50,
+            "price": 298.0,
+            "purchase_price": 1.0,
+            "product": "花生国风AI",
+            "status": "approved",
+            "created_at": "2025-10-01 05:30:21"
+        }
+    ]
+}

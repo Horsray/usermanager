@@ -1,0 +1,453 @@
+{% extends 'layout.html' %}
+{% block title %}分销人员管理{% endblock %}
+{% block content %}
+
+<!-- 页面标题 -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1" style="color: var(--gray-800); font-weight: 700;">
+      <i class="fas fa-users-cog me-3" style="color: var(--primary-color);"></i>分销人员管理
+    </h2>
+    <p class="text-muted mb-0">管理分销代理权限和查看分销统计</p>
+  </div>
+  <div class="d-flex gap-2">
+    <span class="badge bg-primary fs-6 px-3 py-2">
+      <i class="fas fa-users me-2"></i>总分销代理：{{ total_distributors }}
+    </span>
+    <span class="badge bg-success fs-6 px-3 py-2">
+      <i class="fas fa-user-check me-2"></i>活跃：{{ active_distributors }}
+    </span>
+    <span class="badge bg-secondary fs-6 px-3 py-2">
+      <i class="fas fa-user-times me-2"></i>非活跃：{{ inactive_distributors }}
+    </span>
+  </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card text-center">
+      <div class="card-body">
+        <i class="fas fa-users fa-2x text-primary mb-2"></i>
+        <h4 class="card-title">{{ total_distributors }}</h4>
+        <p class="card-text text-muted">总分销代理</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center">
+      <div class="card-body">
+        <i class="fas fa-user-check fa-2x text-success mb-2"></i>
+        <h4 class="card-title">{{ active_distributors }}</h4>
+        <p class="card-text text-muted">活跃代理</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center">
+      <div class="card-body">
+        <i class="fas fa-user-times fa-2x text-secondary mb-2"></i>
+        <h4 class="card-title">{{ inactive_distributors }}</h4>
+        <p class="card-text text-muted">非活跃代理</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center">
+      <div class="card-body">
+        <i class="fas fa-user-plus fa-2x text-info mb-2"></i>
+        <h4 class="card-title">{{ available_users|length }}</h4>
+        <p class="card-text text-muted">用户数</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 搜索和筛选区域 -->
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="fas fa-filter me-2"></i>筛选条件
+  </div>
+  <div class="card-body">
+    <form class="row row-cols-lg-auto g-2 align-items-end" method="get">
+      <div class="col-auto">
+        <label class="form-label">搜索用户名</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-search"></i></span>
+          <input type="text" name="q" class="form-control" placeholder="输入用户名" value="{{ request.args.get('q', '') }}">
+        </div>
+      </div>
+      <div class="col-auto">
+        <label class="form-label">搜索昵称</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-user"></i></span>
+          <input type="text" name="nick" class="form-control" placeholder="输入昵称" value="{{ request.args.get('nick', '') }}">
+        </div>
+      </div>
+      <div class="col-auto">
+        <label class="form-label">搜索分销ID</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-id-card"></i></span>
+          <input type="text" name="distributor_id" class="form-control" placeholder="输入分销ID" value="{{ request.args.get('distributor_id', '') }}">
+        </div>
+      </div>
+      <div class="col-auto">
+        <label class="form-label">状态</label>
+        <select name="status" class="form-select">
+          <option value="">全部</option>
+          <option value="active" {% if request.args.get('status')=='active' %}selected{% endif %}>活跃</option>
+          <option value="inactive" {% if request.args.get('status')=='inactive' %}selected{% endif %}>非活跃</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label">开始日期</label>
+        <input type="date" name="start" class="form-control" value="{{ request.args.get('start', '') }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">结束日期</label>
+        <input type="date" name="end" class="form-control" value="{{ request.args.get('end', '') }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">排序</label>
+        <select name="sort" class="form-select">
+          <option value="desc" {% if request.args.get('sort')=='desc' %}selected{% endif %}>新→旧</option>
+          <option value="asc" {% if request.args.get('sort')=='asc' %}selected{% endif %}>旧→新</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-search me-2"></i>筛选
+        </button>
+        <a href="{{ url_for('distributor_management') }}" class="btn btn-outline-secondary ms-2">
+          <i class="fas fa-undo me-2"></i>重置
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 分销代理列表 -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      <i class="fas fa-list me-2"></i>分销代理列表
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#assignDistributorModal">
+      <i class="fas fa-plus me-2"></i>新增分销代理
+    </button>
+  </div>
+  <div class="card-body">
+    {% if distributors %}
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead class="table-light">
+          <tr>
+            <th>用户名</th>
+            <th>昵称</th>
+            <th>分销ID</th>
+            <th>管理用户数</th>
+            <th>状态</th>
+            <th>分配时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for distributor in distributors %}
+          <tr>
+            <td>
+              <div class="d-flex align-items-center">
+                <i class="fas fa-user-tie me-2 text-primary"></i>
+                <strong>{{ distributor.username }}</strong>
+              </div>
+            </td>
+            <td>{{ distributor.nickname or '-' }}</td>
+            <td>{{ distributor.distributor_id or '-' }}</td>
+            <td>
+              <span class="badge bg-info">{{ distributor.managed_count }}</span>
+            </td>
+            <td>
+              {% if distributor.is_active %}
+                <span class="badge bg-success">活跃</span>
+              {% else %}
+                <span class="badge bg-secondary">非活跃</span>
+              {% endif %}
+            </td>
+            <td>{{ distributor.created_at or '-' }}</td>
+            <td>
+              <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-info" onclick="viewManagedUsers('{{ distributor.username }}')">
+                  <i class="fas fa-eye"></i> 查看用户
+                </button>
+                <button type="button" class="btn btn-outline-danger" onclick="revokeDistributor('{{ distributor.username }}')">
+                  <i class="fas fa-user-minus"></i> 撤销权限
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+      <i class="fas fa-users fa-3x text-muted mb-3"></i>
+      <h5 class="text-muted">暂无分销代理</h5>
+      <p class="text-muted">点击上方按钮为用户分配分销权限</p>
+    </div>
+    {% endif %}
+    
+    <!-- 分页导航 -->
+    {% if pagination.total_pages > 1 %}
+    <div class="card-footer bg-light border-0">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="text-muted">
+          显示第 {{ pagination.start_record }}-{{ pagination.end_record }} 条，共 {{ pagination.total }} 条记录
+        </div>
+      </div>
+      <nav aria-label="分销代理分页">
+        <ul class="pagination justify-content-center mb-0">
+          <!-- 上一页 -->
+          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link border-0" href="{% if pagination.has_prev %}{{ url_for('distributor_management', page=pagination.prev_page, q=request.args.get('q', ''), nick=request.args.get('nick', ''), distributor_id=request.args.get('distributor_id', ''), status=request.args.get('status', ''), start=request.args.get('start', ''), end=request.args.get('end', ''), sort=request.args.get('sort', '')) }}{% else %}#{% endif %}">
+              <span aria-hidden="true">&laquo;</span>
+            </a>
+          </li>
+          
+          <!-- 页码 -->
+          {% set start_page = [1, pagination.page - 2]|max %}
+          {% set end_page = [pagination.total_pages, pagination.page + 2]|min %}
+          
+          {% if start_page > 1 %}
+            <li class="page-item">
+              <a class="page-link border-0" href="{{ url_for('distributor_management', page=1, q=request.args.get('q', ''), nick=request.args.get('nick', ''), distributor_id=request.args.get('distributor_id', ''), status=request.args.get('status', ''), start=request.args.get('start', ''), end=request.args.get('end', ''), sort=request.args.get('sort', '')) }}">1</a>
+            </li>
+            {% if start_page > 2 %}
+              <li class="page-item disabled">
+                <span class="page-link border-0">...</span>
+              </li>
+            {% endif %}
+          {% endif %}
+          
+          {% for page_num in range(start_page, end_page + 1) %}
+            <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+              <a class="page-link border-0 {% if page_num == pagination.page %}bg-primary{% endif %}" href="{{ url_for('distributor_management', page=page_num, q=request.args.get('q', ''), nick=request.args.get('nick', ''), distributor_id=request.args.get('distributor_id', ''), status=request.args.get('status', ''), start=request.args.get('start', ''), end=request.args.get('end', ''), sort=request.args.get('sort', '')) }}">{{ page_num }}</a>
+            </li>
+          {% endfor %}
+          
+          {% if end_page < pagination.total_pages %}
+            {% if end_page < pagination.total_pages - 1 %}
+              <li class="page-item disabled">
+                <span class="page-link border-0">...</span>
+              </li>
+            {% endif %}
+            <li class="page-item">
+              <a class="page-link border-0" href="{{ url_for('distributor_management', page=pagination.total_pages, q=request.args.get('q', ''), nick=request.args.get('nick', ''), distributor_id=request.args.get('distributor_id', ''), status=request.args.get('status', ''), start=request.args.get('start', ''), end=request.args.get('end', ''), sort=request.args.get('sort', '')) }}">{{ pagination.total_pages }}</a>
+            </li>
+          {% endif %}
+          
+          <!-- 下一页 -->
+          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link border-0" href="{% if pagination.has_next %}{{ url_for('distributor_management', page=pagination.next_page, q=request.args.get('q', ''), nick=request.args.get('nick', ''), distributor_id=request.args.get('distributor_id', ''), status=request.args.get('status', ''), start=request.args.get('start', ''), end=request.args.get('end', ''), sort=request.args.get('sort', '')) }}{% else %}#{% endif %}">
+            <span aria-hidden="true">&raquo;</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 分配分销权限模态框 -->
+<div class="modal fade" id="assignDistributorModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+         <h5 class="modal-title">
+           <i class="fas fa-user-plus me-2"></i>新增分销代理
+         </h5>
+         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+       </div>
+      <form id="assignDistributorForm">
+        <div class="modal-body">
+           <div class="mb-3">
+             <label for="userSelect" class="form-label">选择用户</label>
+             <div class="position-relative">
+               <input type="text" class="form-control mb-2" id="userSearchInput" placeholder="输入用户名或昵称进行搜索..." autocomplete="off">
+               <select class="form-select" id="userSelect" name="username" required size="8" style="min-height: 200px;">
+                 <option value="">请选择用户</option>
+                 {% for user in available_users %}
+                 <option value="{{ user.username }}" data-nickname="{{ user.nickname or '' }}">
+                   {{ user.username }} - {{ user.nickname or '无昵称' }}
+                 </option>
+                 {% endfor %}
+               </select>
+             </div>
+             <div class="form-text">可以在上方搜索框中输入用户名或昵称进行过滤</div>
+           </div>
+         </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary">
+             <i class="fas fa-check me-2"></i>确认新增
+           </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 查看管理用户模态框 -->
+<div class="modal fade" id="managedUsersModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-users me-2"></i>管理的用户列表
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="managedUsersContent">
+          <!-- 动态加载内容 -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 用户搜索功能 - 过滤下拉选择框
+document.getElementById('userSearchInput').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase().trim();
+    const userSelect = document.getElementById('userSelect');
+    const options = userSelect.querySelectorAll('option');
+    
+    options.forEach(option => {
+        if (option.value === '') {
+            // 保持默认选项可见
+            option.style.display = '';
+            return;
+        }
+        
+        const username = option.value.toLowerCase();
+        const nickname = (option.getAttribute('data-nickname') || '').toLowerCase();
+        
+        // 模糊匹配：包含搜索词即可
+        if (username.includes(searchTerm) || nickname.includes(searchTerm)) {
+            option.style.display = '';
+        } else {
+            option.style.display = 'none';
+        }
+    });
+});
+
+// 清空搜索框时重置所有选项显示
+document.getElementById('userSearchInput').addEventListener('keyup', function(e) {
+    if (e.target.value === '') {
+        const userSelect = document.getElementById('userSelect');
+        const options = userSelect.querySelectorAll('option');
+        options.forEach(option => {
+            option.style.display = '';
+        });
+    }
+});
+
+// 重置表单
+document.getElementById('assignDistributorModal').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('assignDistributorForm').reset();
+    document.getElementById('userSearchInput').value = '';
+    // 显示所有选项
+    const userSelect = document.getElementById('userSelect');
+    const options = userSelect.querySelectorAll('option');
+    options.forEach(option => {
+        option.style.display = '';
+    });
+});
+
+// 查看管理用户功能
+function viewManagedUsers(distributorUsername) {
+    fetch(`/api/distributor/${distributorUsername}/managed-users`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const usersList = data.users.map(user => 
+                    `<li class="list-group-item">${user.username} - ${user.nickname || '无昵称'}</li>`
+                ).join('');
+                
+                document.getElementById('managedUsersContent').innerHTML = 
+                    `<ul class="list-group">${usersList}</ul>`;
+                
+                const modal = new bootstrap.Modal(document.getElementById('managedUsersModal'));
+                modal.show();
+            } else {
+                alert('获取管理用户列表失败：' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('获取管理用户列表时发生错误');
+        });
+}
+
+// 撤销分销权限
+function revokeDistributor(username) {
+    if (confirm(`确定要撤销用户 ${username} 的分销权限吗？`)) {
+        fetch('/revoke-distributor', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `username=${encodeURIComponent(username)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('分销权限撤销成功');
+                location.reload();
+            } else {
+                alert('撤销失败：' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('撤销失败');
+        });
+    }
+}
+
+// 分配分销权限表单提交
+document.getElementById('assignDistributorForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const username = document.getElementById('userSelect').value;
+    if (!username) {
+        alert('请选择一个用户');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('username', username);
+    
+    fetch('/assign-distributor', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('分销代理新增成功');
+            bootstrap.Modal.getInstance(document.getElementById('assignDistributorModal')).hide();
+            location.reload();
+        } else {
+            alert('新增失败：' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('新增失败');
+    });
+});
+</script>
+
+{% endblock %}

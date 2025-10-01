@@ -1,0 +1,500 @@
+{% extends 'layout.html' %}
+{% block title %}分销商用户管理{% endblock %}
+{% block content %}
+
+<!-- 页面标题 -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1" style="color: var(--gray-800); font-weight: 700;">
+      <i class="fas fa-users me-3" style="color: var(--primary-color);"></i>分销商用户管理
+    </h2>
+    <p class="text-muted mb-0">管理您的用户</p>
+  </div>
+  <div class="d-flex gap-2">
+    <span class="badge bg-primary fs-6 px-3 py-2">
+      <i class="fas fa-users me-2"></i>总用户数：{{ total_users }}
+    </span>
+  </div>
+</div>
+
+<!-- 搜索和筛选区域 -->
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="fas fa-filter me-2"></i>筛选条件
+  </div>
+  <div class="card-body">
+    <form class="row row-cols-lg-auto g-2 align-items-end" method="get">
+      <div class="col-auto">
+        <label class="form-label">搜索用户名</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-search"></i></span>
+          <input type="text" name="q" class="form-control" placeholder="输入用户名" value="{{ request.args.get('q', '') }}">
+        </div>
+      </div>
+      <div class="col-auto">
+        <label class="form-label">搜索昵称</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-user"></i></span>
+          <input type="text" name="nick" class="form-control" placeholder="输入昵称" value="{{ request.args.get('nick', '') }}">
+        </div>
+      </div>
+      <div class="col-auto">
+        <label class="form-label">销售状态</label>
+        <select name="sale" class="form-select">
+          <option value="">全部</option>
+          <option value="unsold" {% if request.args.get('sale')=='unsold' %}selected{% endif %}>库存（未售）</option>
+          <option value="sold" {% if request.args.get('sale')=='sold' %}selected{% endif %}>已售出</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label">开始日期</label>
+        <input type="date" name="start" class="form-control" value="{{ request.args.get('start', '') }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">结束日期</label>
+        <input type="date" name="end" class="form-control" value="{{ request.args.get('end', '') }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">排序</label>
+        <select name="sort" class="form-select">
+          <option value="desc" {% if request.args.get('sort')=='desc' %}selected{% endif %}>新→旧</option>
+          <option value="asc" {% if request.args.get('sort')=='asc' %}selected{% endif %}>旧→新</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-search me-2"></i>筛选
+        </button>
+        <a href="{{ url_for('distributor_users') }}" class="btn btn-outline-secondary ms-2">
+          <i class="fas fa-undo me-2"></i>刷新
+        </a>
+      </div>
+      <div class="col-auto ms-auto d-flex gap-2 flex-wrap">
+        <span class="badge bg-warning text-dark fs-6 px-3 py-2">
+          <i class="fas fa-box-open me-2"></i>库存账户：{{ unsold_users }}
+        </span>
+        <span class="badge bg-light text-success border border-success fs-6 px-3 py-2">
+          <i class="fas fa-check-circle me-2"></i>已售账户：{{ sold_users }}
+        </span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 操作按钮区域 -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <div class="d-flex flex-wrap gap-2">
+          <button type="button" class="btn btn-info" onclick="copySelectedUsers()">
+            <i class="fas fa-copy me-2"></i>批量复制账号
+          </button>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="d-flex flex-wrap gap-2 justify-content-md-end">
+          <button type="button" class="btn btn-success" onclick="exportSelectedUsers()">
+            <i class="fas fa-download me-2"></i>批量导出
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <!-- 用户列表表格 -->
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-list me-2"></i>用户列表</span>
+      <small class="text-muted">共 {{ total_users }} 条记录</small>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th scope="col" style="width: 50px;">
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" id="check-all" onclick="document.querySelectorAll('input[name=names]').forEach(c=>c.checked=this.checked)">
+                  <label class="form-check-label" for="check-all"></label>
+                </div>
+              </th>
+              <th>用户编号</th>
+              <th>用户名</th>
+              <th>昵称</th>
+              <th>账户状态</th>
+              <th>IP地址</th>
+              <th>最后登录</th>
+              <th>创建时间</th>
+              <th>产品</th>
+              <th>备注</th>
+              <th>销售状态</th>
+              <th style="width: 200px;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for user in users %}
+            <tr>
+              <td>
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" name="names" value="{{ user.username }}" id="check-{{ loop.index }}">
+                  <label class="form-check-label" for="check-{{ loop.index }}"></label>
+                </div>
+              </td>
+              <td>
+                <span class="badge bg-light text-dark">{{ user.user_id }}</span>
+              </td>
+              <td>
+                <div class="d-flex align-items-center">
+                  <div class="avatar-sm me-3">
+                    <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                      <i class="fas fa-user text-white"></i>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="fw-bold">{{ user.username }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="text-muted d-block" id="nickname-display-{{ user.username | replace('"', '&quot;') | replace("'", '&#39;') }}" onclick="startNicknameEdit('{{ user.username | replace('"', '&quot;') | replace("'", '&#39;') }}')" style="cursor:pointer; min-height:1.5rem; word-break:break-all;">{{ user.nickname or '未设置' }}</span>
+                <input type="text" class="form-control form-control-sm d-none" id="nickname-input-{{ user.username | replace('"', '&quot;') | replace("'", '&#39;') }}" value="{{ user.nickname }}" style="width:100%;" onblur="saveNickname('{{ user.username | replace('"', '&quot;') | replace("'", '&#39;') }}')" onkeydown="if(event.key==='Enter'){this.blur();}">
+              </td>
+              <td>
+                {% if user.enabled %}
+                  <span class="badge bg-success">
+                    <i class="fas fa-check-circle me-1"></i>已启用
+                  </span>
+                {% else %}
+                  <span class="badge bg-danger">
+                    <i class="fas fa-times-circle me-1"></i>已停用
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                {% if user.location %}
+                  <div class="d-flex align-items-center">
+                    <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                    <div>
+                      <div class="fw-bold">{{ user.location }}</div>
+                      <small class="text-muted">{{ user.ip_address }}</small>
+                    </div>
+                  </div>
+                {% else %}
+                  <span class="text-muted">
+                    <i class="fas fa-question-circle me-1"></i>未知
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                {% if user.last_login %}
+                  <div>
+                    <div class="fw-bold">{{ user.last_login.split(' ')[0] }}</div>
+                    <small class="text-muted">{{ user.last_login.split(' ')[1] }}</small>
+                  </div>
+                {% else %}
+                  <span class="text-muted">从未登录</span>
+                {% endif %}
+              </td>
+              <td>
+                <div>
+                  <div class="fw-bold">{{ user.created_at.split(' ')[0] }}</div>
+                  <small class="text-muted">{{ user.created_at.split(' ')[1] }}</small>
+                </div>
+              </td>
+              <td>
+                <span class="badge bg-info">
+                  <i class="fas fa-tag me-1"></i>{{ user.product or '未设置' }}
+                </span>
+              </td>
+              <td>
+                <span class="text-muted d-block" id="remark-display-{{ loop.index }}" onclick="startRemarkEdit('{{ user.username }}', {{ loop.index }})" style="cursor:pointer; min-height:1.5rem; word-break:break-all;">{{ user.remark or '无' }}</span>
+                <input type="text" class="form-control form-control-sm d-none" id="remark-input-{{ loop.index }}" value="{{ user.remark }}" style="width:100%;" onblur="saveRemark('{{ user.username }}', {{ loop.index }})" onkeydown="if(event.key==='Enter'){this.blur();}">
+              </td>
+              <td>
+                {% if user.user_type == 'sold' %}
+                  <span class="badge bg-success">
+                    <i class="fas fa-check-circle me-1"></i>已售出
+                  </span>
+                {% elif user.user_type == 'unsold' %}
+                  <span class="badge bg-warning text-dark">
+                    <i class="fas fa-box me-1"></i>库存
+                  </span>
+                {% else %}
+                  <span class="badge bg-secondary">
+                    <i class="fas fa-question me-1"></i>未知
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="btn-group" role="group">
+                  {% if user.user_type == 'unsold' %}
+                    <button type="button" class="btn btn-sm btn-success" onclick="markAsSold('{{ user.username }}')">
+                      <i class="fas fa-flag me-1"></i>标记已售
+                    </button>
+                  {% endif %}
+                  <button type="button" class="btn btn-sm btn-info" onclick="copyUser('{{ user.username }}')">
+                    <i class="fas fa-copy"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+                </table>
+            </div>
+            
+            <!-- 分页导航 -->
+            {% if pagination.total_pages > 1 %}
+            <div class="card-footer bg-light border-0">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="text-muted">
+                        显示第 {{ pagination.start_record }}-{{ pagination.end_record }} 条，共 {{ pagination.total }} 条记录
+                    </div>
+                </div>
+                <nav aria-label="用户列表分页">
+                    <ul class="pagination justify-content-center mb-0">
+                        <!-- 上一页 -->
+                        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link border-0" href="{% if pagination.has_prev %}{{ url_for('distributor_users', page=pagination.prev_page, q=request.args.get('q', ''), nick=request.args.get('nick', ''), sale=request.args.get('sale', ''), start=request.args.get('start', ''), end=request.args.get('end', ''), sort=request.args.get('sort', 'desc')) }}{% else %}#{% endif %}" aria-label="上一页">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                        
+                        <!-- 页码 -->
+                        {% set start_page = [1, pagination.page - 2]|max %}
+                        {% set end_page = [pagination.total_pages, pagination.page + 2]|min %}
+                        
+                        {% if start_page > 1 %}
+                            <li class="page-item">
+                                <a class="page-link border-0" href="{{ url_for('distributor_users', page=1, q=request.args.get('q', ''), nick=request.args.get('nick', ''), sale=request.args.get('sale', ''), start=request.args.get('start', ''), end=request.args.get('end', ''), sort=request.args.get('sort', 'desc')) }}">1</a>
+                            </li>
+                            {% if start_page > 2 %}
+                                <li class="page-item disabled">
+                                    <span class="page-link border-0">...</span>
+                                </li>
+                            {% endif %}
+                        {% endif %}
+                        
+                        {% for page_num in range(start_page, end_page + 1) %}
+                            <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                                <a class="page-link border-0 {% if page_num == pagination.page %}bg-primary{% endif %}" href="{{ url_for('distributor_users', page=page_num, q=request.args.get('q', ''), nick=request.args.get('nick', ''), sale=request.args.get('sale', ''), start=request.args.get('start', ''), end=request.args.get('end', ''), sort=request.args.get('sort', 'desc')) }}">{{ page_num }}</a>
+                            </li>
+                        {% endfor %}
+                        
+                        {% if end_page < pagination.total_pages %}
+                            {% if end_page < pagination.total_pages - 1 %}
+                                <li class="page-item disabled">
+                                    <span class="page-link border-0">...</span>
+                                </li>
+                            {% endif %}
+                            <li class="page-item">
+                                <a class="page-link border-0" href="{{ url_for('distributor_users', page=pagination.total_pages, q=request.args.get('q', ''), nick=request.args.get('nick', ''), sale=request.args.get('sale', ''), start=request.args.get('start', ''), end=request.args.get('end', ''), sort=request.args.get('sort', 'desc')) }}">{{ pagination.total_pages }}</a>
+                            </li>
+                        {% endif %}
+                        
+                        <!-- 下一页 -->
+                        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link border-0" href="{% if pagination.has_next %}{{ url_for('distributor_users', page=pagination.next_page, q=request.args.get('q', ''), nick=request.args.get('nick', ''), sale=request.args.get('sale', ''), start=request.args.get('start', ''), end=request.args.get('end', ''), sort=request.args.get('sort', 'desc')) }}{% else %}#{% endif %}" aria-label="下一页">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+    </div>
+  </div>
+
+<script>
+// 创建用户数据映射
+const userDataMap = {};
+{% for user in users %}
+userDataMap['{{ user.username }}'] = {
+  username: '{{ user.username }}',
+  password: '{{ user.password | default("未知") }}'
+};
+{% endfor %}
+
+// 复制选中用户
+function copySelectedUsers() {
+  const selected = Array.from(document.querySelectorAll('input[name=names]:checked')).map(cb => cb.value);
+  if (selected.length === 0) {
+    alert('请先选择要复制的用户');
+    return;
+  }
+  
+  // 获取选中用户的账号密码
+  const userDataList = [];
+  selected.forEach(username => {
+    const userData = userDataMap[username];
+    if (userData) {
+      userDataList.push(`用户名：${userData.username}   密码：${userData.password}`);
+    }
+  });
+  
+  const copyText = userDataList.join('\n');
+  navigator.clipboard.writeText(copyText).then(() => {
+    alert(`已复制 ${selected.length} 个用户账号密码到剪贴板\n`);
+  });
+}
+
+// 复制单个用户
+function copyUser(username) {
+  const userData = userDataMap[username];
+  if (userData) {
+    const copyText = `用户名：${userData.username}   密码：${userData.password}`;
+    navigator.clipboard.writeText(copyText).then(() => {
+      alert('用户账号密码已复制到剪贴板\n');
+    });
+  } else {
+    alert('未找到用户信息');
+  }
+}
+
+// 导出选中用户
+function exportSelectedUsers() {
+  const selected = Array.from(document.querySelectorAll('input[name=names]:checked')).map(cb => cb.value);
+  if (selected.length === 0) {
+    alert('请先选择要导出的用户');
+    return;
+  }
+  
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '{{ url_for("distributor_export_users") }}';
+  
+  selected.forEach(username => {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'names';
+    input.value = username;
+    form.appendChild(input);
+  });
+  
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+}
+
+// 标记为已售
+function markAsSold(username) {
+  if (confirm('确定将此账户标记为已售吗？')) {
+    fetch('{{ url_for("distributor_mark_sold") }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({username: username})
+    }).then(response => {
+      if (response.ok) {
+        location.reload();
+      } else {
+        alert('操作失败');
+      }
+    });
+  }
+}
+
+// 标记为未售 - 移除此函数，因为不再需要
+// function markAsUnsold(username) {
+//   if (confirm('确定将此账户标记为未售吗？')) {
+//     fetch('{{ url_for("distributor_mark_unsold") }}', {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//       },
+//       body: JSON.stringify({username: username})
+//     }).then(response => {
+//       if (response.ok) {
+//         location.reload();
+//       } else {
+//         alert('操作失败');
+//       }
+//     });
+//   }
+// }
+
+// 开始编辑昵称
+function startNicknameEdit(username) {
+  const displayElement = document.getElementById('nickname-display-' + username.replace(/'/g, '&#39;').replace(/"/g, '&quot;'));
+  const inputElement = document.getElementById('nickname-input-' + username.replace(/'/g, '&#39;').replace(/"/g, '&quot;'));
+  
+  displayElement.classList.add('d-none');
+  inputElement.classList.remove('d-none');
+  inputElement.focus();
+  inputElement.select();
+}
+
+// 保存昵称
+function saveNickname(username) {
+  const displayElement = document.getElementById('nickname-display-' + username.replace(/'/g, '&#39;').replace(/"/g, '&quot;'));
+  const inputElement = document.getElementById('nickname-input-' + username.replace(/'/g, '&#39;').replace(/"/g, '&quot;'));
+  const newNickname = inputElement.value;
+  
+  fetch('{{ url_for("update_user_field") }}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      username: username,
+      field: 'nickname',
+      value: newNickname
+    })
+  }).then(response => {
+    if (response.ok) {
+      displayElement.textContent = newNickname || '未设置';
+      displayElement.classList.remove('d-none');
+      inputElement.classList.add('d-none');
+    } else {
+      alert('保存失败');
+      displayElement.classList.remove('d-none');
+      inputElement.classList.add('d-none');
+    }
+  });
+}
+
+// 开始编辑备注
+function startRemarkEdit(username, index) {
+  const displayElement = document.getElementById('remark-display-' + index);
+  const inputElement = document.getElementById('remark-input-' + index);
+  
+  displayElement.classList.add('d-none');
+  inputElement.classList.remove('d-none');
+  inputElement.focus();
+  inputElement.select();
+}
+
+// 保存备注
+function saveRemark(username, index) {
+  const displayElement = document.getElementById('remark-display-' + index);
+  const inputElement = document.getElementById('remark-input-' + index);
+  const newRemark = inputElement.value;
+  
+  fetch('{{ url_for("update_user_field") }}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      username: username,
+      field: 'remark',
+      value: newRemark
+    })
+  }).then(response => {
+    if (response.ok) {
+      displayElement.textContent = newRemark || '无';
+      displayElement.classList.remove('d-none');
+      inputElement.classList.add('d-none');
+    } else {
+      alert('保存失败');
+      displayElement.classList.remove('d-none');
+      inputElement.classList.add('d-none');
+    }
+  });
+}
+</script>
+
+{% endblock %}

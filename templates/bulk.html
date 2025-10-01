@@ -1,0 +1,315 @@
+{% extends 'layout.html' %}
+{% block title %}{% if session.get('admin') %}批量用户管理{% else %}批量申请{% endif %}{% endblock %}
+{% block content %}
+
+<!-- 页面标题 -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+  <h2 class="mb-1" style="color: var(--gray-800); font-weight: 700;">
+    <i class="fas fa-users-cog me-3" style="color: var(--primary-color);"></i>{% if session.get('admin') %}批量用户管理{% else %}批量申请{% endif %}
+  </h2>
+  <p class="text-muted mb-0">{% if session.get('admin') %}批量开通随机账号{% else %}向管理员申请批量开通{% endif %}</p>
+  </div>
+</div>
+
+{% if success %}
+<div class="alert alert-success">提交成功，请等待审批</div>
+{% endif %}
+
+
+<!-- 批量申请表单 -->
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="fas fa-plus-circle me-2"></i>{% if session.get('admin') %}批量开通账号{% else %}批量申请{% endif %}
+  </div>
+  <div class="card-body">
+    <form class="row g-3" method="post" action="{{ url_for('bulk_create') if session.get('admin') else url_for('apply_bulk') }}" id="bulk-create-form">
+      <div class="col-md-2">
+        <label class="form-label">开通数量</label>
+        <input type="number" name="count" class="form-control" value="1" min="1" max="100" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">零售单价（元）</label>
+        <input type="number" name="price" step="0.01" placeholder="0.00" class="form-control" id="bulk-price" readonly required>
+      </div>
+      {% if session.get('agent') %}
+      <div class="col-md-2">
+        <label class="form-label">进货单价（元）</label>
+        <input type="number" name="purchase_price" step="0.01" placeholder="0.00" class="form-control" required>
+      </div>
+      {% endif %}
+      <div class="col-md-{% if session.get('agent') %}2{% else %}4{% endif %}">
+        <label class="form-label">产品</label>
+        <select name="product" class="form-select" id="bulk-product" required>
+          <option value="">请选择产品</option>
+          {% for p in products.values() %}
+          <option value="{{ p.name }}" data-price="{{ p.price }}" {% if p.default %}selected{% endif %}>{{ p.name }} {{ p.version }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">&nbsp;</label>
+        <div>
+          <button type="button" class="btn btn-primary" onclick="confirmBulkCreate()">
+            <i class="fas fa-plus me-2"></i>{% if session.get('admin') %}批量开通{% else %}批量申请{% endif %}
+          </button>
+          <small class="text-muted ms-3">
+            <i class="fas fa-info-circle me-1"></i>{% if session.get('agent') %}请务必准确填写进货单价，否则影响台账统计{% else %}请确保用户已完成付费{% endif %}
+          </small>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if apps %}
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="fas fa-clock me-2"></i>我的申请记录
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr><th>提交时间</th><th>数量</th><th>零售单价</th><th>进货单价</th><th>总计金额</th><th>产品</th><th>状态</th></tr>
+        </thead>
+        <tbody>
+        {% for a in apps %}
+        <tr>
+          <td>{{ a.created_at }}</td>
+          <td>{{ a.count }}</td>
+          <td>{{ a.price }}</td>
+          <td>{{ a.purchase_price if a.purchase_price else '-' }}</td>
+          <td>{{ '%.2f' % (a.count * a.price) }}</td>
+          <td>{{ a.product }}</td>
+          <td>
+            {% if a.status=='pending' %}<span class="text-primary">待审核</span>
+            {% elif a.status=='approved' %}<span class="text-success">审批通过</span>
+            {% else %}<span class="text-danger">已拒绝</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- 分页导航 -->
+    {% if pagination.total_pages > 1 %}
+    <div class="card-footer">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="text-muted">
+          显示第 {{ pagination.start_record }} - {{ pagination.end_record }} 条，共 {{ pagination.total }} 条记录
+        </div>
+        <nav aria-label="申请记录分页">
+          <ul class="pagination pagination-sm mb-0">
+            {% if pagination.has_prev %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('apply_bulk', page=pagination.prev_page) }}">上一页</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+              <span class="page-link">上一页</span>
+            </li>
+            {% endif %}
+            
+            {% for page_num in range(1, pagination.total_pages + 1) %}
+              {% if page_num == pagination.page %}
+              <li class="page-item active">
+                <span class="page-link">{{ page_num }}</span>
+              </li>
+              {% elif page_num <= 3 or page_num > pagination.total_pages - 3 or (page_num >= pagination.page - 1 and page_num <= pagination.page + 1) %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('apply_bulk', page=page_num) }}">{{ page_num }}</a>
+              </li>
+              {% elif page_num == 4 and pagination.page > 5 %}
+              <li class="page-item disabled">
+                <span class="page-link">...</span>
+              </li>
+              {% elif page_num == pagination.total_pages - 3 and pagination.page < pagination.total_pages - 4 %}
+              <li class="page-item disabled">
+                <span class="page-link">...</span>
+              </li>
+              {% endif %}
+            {% endfor %}
+            
+            {% if pagination.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('apply_bulk', page=pagination.next_page) }}">下一页</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+              <span class="page-link">下一页</span>
+            </li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if accounts %}
+<!-- 生成结果 -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="fas fa-check-circle me-2"></i>本次生成结果</span>
+    <div>
+      <a class="btn btn-success btn-sm" href="{{ url_for('bulk_export') }}">
+        <i class="fas fa-download me-2"></i>导出到Excel
+      </a>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>用户名</th>
+            <th>密码</th>
+            <th>产品</th>
+            <th>单价</th>
+            <th>操作用户</th>
+            <th>时间</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for acc in accounts %}
+        <tr>
+          <td>
+            <span class="badge bg-light text-dark">{{ acc.username }}</span>
+          </td>
+          <td>
+            <code class="text-primary">{{ acc.password }}</code>
+          </td>
+          <td>
+            <span class="badge bg-primary">{{ info.product if info else '' }}</span>
+          </td>
+          <td>
+            <span class="text-success fw-bold">¥{{ info.price if info else '' }}</span>
+          </td>
+          <td>
+            <span class="badge bg-info">{{ info.admin if info else '' }}</span>
+          </td>
+          <td>
+            <small class="text-muted">{{ info.time if info else '' }}</small>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 分页导航 -->
+{% if (total-1)//per_page + 1 > 1 %}
+<nav class="mt-4">
+  <ul class="pagination justify-content-center">
+    {% for p in range(1, (total-1)//per_page + 2) %}
+    <li class="page-item {% if p==page %}active{% endif %}">
+      <a class="page-link" href="{{ url_for('bulk_manage', page=p) }}">{{ p }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+</nav>
+{% endif %}
+{% endif %}
+
+<!-- 确认对话框 -->
+<div class="modal fade" id="confirm-bulk-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-exclamation-triangle text-warning me-2"></i>{% if session.get('admin') %}确认批量开通{% else %}确认批量申请{% endif %}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          <i class="fas fa-info-circle me-2"></i>
+          <strong>重要提醒：</strong>请确认用户已完成付费后再进行批量操作。
+        </div>
+        <div class="row">
+          <div class="col-6">
+            <strong>开通数量：</strong><span id="confirm-count"></span>
+          </div>
+          <div class="col-6">
+            <strong>单价：</strong>¥<span id="confirm-price"></span>
+          </div>
+          <div class="col-12 mt-2">
+            <strong>产品：</strong><span id="confirm-product"></span>
+          </div>
+          <div class="col-12 mt-2">
+            <strong>总金额：</strong><span class="text-primary fw-bold fs-5">¥<span id="confirm-total"></span></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="fas fa-times me-2"></i>取消
+        </button>
+        <button type="button" class="btn btn-primary" onclick="submitBulkCreate()">
+          <i class="fas fa-check me-2"></i>{% if session.get('admin') %}确认开通{% else %}确认申请{% endif %}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const sel = document.getElementById('bulk-product');
+  const priceInput = document.getElementById('bulk-price');
+  
+  if (sel) {
+    function setPrice() {
+      const p = sel.selectedOptions[0].dataset.price;
+      if (p !== undefined) {
+        priceInput.value = p;
+      }
+    }
+    sel.addEventListener('change', setPrice);
+    setPrice();
+  }
+  
+  function confirmBulkCreate() {
+    const form = document.getElementById('bulk-create-form');
+    const formData = new FormData(form);
+    
+    const count = formData.get('count');
+    const price = formData.get('price');
+    const product = formData.get('product');
+    
+    if (!count || !price || !product) {
+      alert('请填写完整信息');
+      return;
+    }
+    
+    // 检查代理是否填写了进货单价
+    {% if session.get('agent') %}
+    const purchasePrice = formData.get('purchase_price');
+    if (!purchasePrice || purchasePrice == '0') {
+      alert('请务必准确填写进货单价，否则影响台账统计');
+      return;
+    }
+    {% endif %}
+    
+    const total = (parseFloat(count) * parseFloat(price)).toFixed(2);
+    
+    document.getElementById('confirm-count').textContent = count;
+    document.getElementById('confirm-price').textContent = price;
+    document.getElementById('confirm-product').textContent = sel.selectedOptions[0].text;
+    document.getElementById('confirm-total').textContent = total;
+    
+    const modal = new bootstrap.Modal(document.getElementById('confirm-bulk-modal'));
+    modal.show();
+  }
+  
+  function submitBulkCreate() {
+    document.getElementById('bulk-create-form').submit();
+  }
+</script>
+
+{% endblock %}

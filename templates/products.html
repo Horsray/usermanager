@@ -1,0 +1,33 @@
+{% extends 'layout.html' %}
+{% block title %}产品维护{% endblock %}
+{% block content %}
+<h4>产品维护</h4>
+<form class="row g-2 mb-3" method="post" action="{{ url_for('add_product') }}">
+  <div class="col-auto"><input class="form-control" name="name" placeholder="名称"></div>
+  <div class="col-auto"><input class="form-control" name="version" placeholder="版本"></div>
+  <div class="col-auto"><input class="form-control" name="ptype" placeholder="类型"></div>
+  <div class="col-auto"><input type="number" step="0.01" class="form-control" name="price" placeholder="零售价格"></div>
+  <div class="col-auto"><div class="form-check"><input class="form-check-input" type="checkbox" name="default" id="pdef"><label class="form-check-label" for="pdef">默认</label></div></div>
+  <div class="col-auto"><button class="btn btn-primary" type="submit">新增</button></div>
+</form>
+<table class="table table-striped table-sm">
+  <thead><tr><th>名称</th><th>版本</th><th>类型</th><th>价格</th><th>默认</th><th>操作</th></tr></thead>
+  <tbody>
+  {% for key, p in products.items() %}
+  <tr>
+    <td>{{ p.name }}</td>
+    <td>{{ p.version }}</td>
+    <td>{{ p.type }}</td>
+    <td>{{ p.price }}</td>
+    <td>{% if p.default %}✓{% endif %}</td>
+    <td>
+      <form class="d-inline" method="post">
+        <button class="btn btn-sm btn-danger" formaction="{{ url_for('delete_product', name=key) }}" formmethod="post" onclick="return confirm('确定删除?')">删除</button>
+        <button class="btn btn-sm btn-secondary ms-1" formaction="{{ url_for('set_default_product', name=key) }}" formmethod="post">设为默认</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

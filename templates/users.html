@@ -1,0 +1,1183 @@
+{% extends 'layout.html' %}
+{% block title %}用户列表{% endblock %}
+{% block content %}
+
+<!-- 页面标题 -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1" style="color: var(--gray-800); font-weight: 700;">
+      <i class="fas fa-users me-3" style="color: var(--primary-color);"></i>用户管理
+    </h2>
+    <p class="text-muted mb-0">管理系统用户账户和权限</p>
+  </div>
+  <div class="d-flex gap-2">
+    <span class="badge bg-primary fs-6 px-3 py-2">
+      <i class="fas fa-users me-2"></i>总用户数：{{ total }}
+    </span>
+  </div>
+</div>
+
+<!-- 搜索和筛选区域 -->
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="fas fa-filter me-2"></i>筛选条件
+  </div>
+  <div class="card-body">
+    <form class="row row-cols-lg-auto g-2 align-items-end" method="get">
+      <div class="col-auto">
+        <label class="form-label">搜索用户名</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-search"></i></span>
+          <input type="text" name="q" class="form-control" placeholder="输入用户名" value="{{ query }}">
+        </div>
+      </div>
+      <!-- 在上面这个块后面，新增这一块 -->
+<div class="col-auto">
+  <label class="form-label">搜索昵称</label>
+  <div class="input-group">
+    <span class="input-group-text"><i class="fas fa-user"></i></span>
+    <input type="text" name="nick" class="form-control" placeholder="输入昵称" value="{{ nick }}">
+  </div>
+</div>
+
+      <div class="col-auto">
+        <label class="form-label">账户状态</label>
+        <select name="status" class="form-select">
+          <option value="">全部状态</option>
+          <option value="enabled" {% if status=='enabled' %}selected{% endif %}>已启用</option>
+          <option value="disabled" {% if status=='disabled' %}selected{% endif %}>已停用</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label">售出状态</label>
+        <select name="sale" class="form-select">
+          <option value="">全部</option>
+          <option value="forsale" {% if sale=='forsale' %}selected{% endif %}>未售</option>
+          <option value="sold" {% if sale=='sold' %}selected{% endif %}>已售</option>
+        </select>
+        </div>
+{% if session.get('admin') %}
+<div class="col-auto">
+  <label class="form-label">所属代理</label>
+  <select name="owner" class="form-select">
+    <option value="">全部代理</option>
+    {% for a in agents %}
+      <option value="{{ a }}" {% if owner==a %}selected{% endif %}>{{ a }}</option>
+    {% endfor %}
+  </select>
+</div>
+{% endif %}
+{% if not session.get('admin') %}
+<div class="col-auto">
+  <label class="form-label">分销代理</label>
+  <select name="assigned_distributor" class="form-select" id="assigned_distributor">
+    <option value="">全部分销代理</option>
+  </select>
+</div>
+{% endif %}
+      <div class="col-auto">
+        <label class="form-label">开始日期</label>
+        <input type="date" name="start" class="form-control" value="{{ start }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">结束日期</label>
+        <input type="date" name="end" class="form-control" value="{{ end }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">排序</label>
+        <select name="sort" class="form-select">
+          <option value="desc" {% if sort=='desc' %}selected{% endif %}>新→旧</option>
+          <option value="asc" {% if sort=='asc' %}selected{% endif %}>旧→新</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-search me-2"></i>筛选
+        </button>
+          <a href="{{ session.get('admin') and url_for('user_list') or url_for('agent_users') }}" class="btn btn-outline-secondary ms-2"><i class="fas fa-undo me-2"></i>刷新</a>
+      </div>
+<div class="col-auto ms-auto d-flex gap-2 flex-wrap">
+  <span class="badge bg-light text-success border border-success fs-6 px-3 py-2">
+    <i class="fas fa-calendar-day me-2"></i>今日售出：{{ today_sold_count or 0 }}
+  </span>
+  <span class="badge bg-light text-success border border-success fs-6 px-3 py-2">
+    <i class="fas fa-calendar-alt me-2"></i>本月售出：{{ month_sold_count or 0 }}
+  </span>
+  <span class="badge bg-warning text-dark fs-6 px-3 py-2">
+    <i class="fas fa-box-open me-2"></i>未售账户：{{ unsold_count or 0 }}
+  </span>
+</div>
+    </form>
+  </div>
+</div>
+
+<!-- 操作按钮区域 -->
+<form method="post" action="{{ url_for('batch_action') if session.get('admin') else url_for('agent_batch_action') }}" id="batchForm">
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row align-items-center">
+        <div class="col-md-8">
+          <div class="d-flex flex-wrap gap-2">
+            {% if session.get('admin') %}
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#add-user">
+              <i class="fas fa-plus me-2"></i>新增用户
+            </button>
+            <button type="submit" name="action" value="delete" class="btn btn-danger" onclick="return confirm('确定删除选中的用户吗？')">
+              <i class="fas fa-trash me-2"></i>批量删除
+            </button>
+            {% else %}
+            <button type="submit" name="action" value="sold" class="btn btn-success">
+              <i class="fas fa-flag me-2"></i>标记已售
+            </button>
+            {% endif %}
+            <button type="submit" name="action" value="disable" class="btn btn-warning">
+              <i class="fas fa-ban me-2"></i>批量停用
+            </button>
+            <button type="submit" name="action" value="enable" class="btn btn-success">
+              <i class="fas fa-check me-2"></i>批量启用
+            </button>
+            <button type="button" class="btn btn-info" onclick="copySelectedUsers()">
+              <i class="fas fa-copy me-2"></i>批量复制账号
+            </button>
+            {% if not session.get('admin') %}
+            <button type="button" class="btn btn-primary" onclick="showAccountAssignModal()">
+              <i class="fas fa-share-alt me-2"></i>账号分配
+            </button>
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="d-flex flex-wrap gap-2 justify-content-md-end">
+            {% if not session.get('admin') %}
+            <button type="button" class="btn btn-success" onclick="exportSelectedUsers()">
+              <i class="fas fa-download me-2"></i>批量导出
+            </button>
+            {% endif %}
+            {% if session.get('admin') %}
+            <a class="btn btn-outline-primary" href="{{ url_for('export_users') }}">
+              <i class="fas fa-download me-2"></i>导出全部
+            </a>
+            <a class="btn btn-outline-secondary" href="{{ url_for('download_template') }}">
+              <i class="fas fa-file-excel me-2"></i>下载模板
+            </a>
+            <input type="file" name="file" id="import-file" class="d-none" onchange="this.form.submit()" formaction="{{ url_for('import_users') }}" formmethod="post" enctype="multipart/form-data">
+            <label for="import-file" class="btn btn-outline-success">
+              <i class="fas fa-upload me-2"></i>导入用户
+            </label>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 用户列表表格 -->
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-list me-2"></i>用户列表</span>
+      <small class="text-muted">共 {{ total }} 条记录</small>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th scope="col" style="width: 50px;">
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" id="check-all" onclick="document.querySelectorAll('input[name=names]').forEach(c=>c.checked=this.checked)">
+                  <label class="form-check-label" for="check-all"></label>
+                </div>
+              </th>
+              <th>用户编号</th>
+              <th>用户名</th>
+              <th>昵称</th>
+              <th>账户类型</th>
+              <th>账户状态</th>
+              <th>IP地址</th>
+              <th>最后登录</th>
+              <th>创建时间</th>
+              <th>类型</th>
+              <th>产品</th>
+              <th>备注</th>
+              <th>销售状态</th>
+              {% if session.get('admin') %}
+  <th>所属代理</th>
+{% endif %} 
+              <th style="width: 200px;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for name, info in users.items() %}
+            <tr>
+              <td>
+                <div class="form-check">
+                  <input type="checkbox" class="form-check-input" name="names" value="{{ name }}" id="check-{{ loop.index }}">
+                  <label class="form-check-label" for="check-{{ loop.index }}"></label>
+                </div>
+              </td>
+              <td>
+                <span class="badge bg-light text-dark">{{ info.user_id }}</span>
+              </td>
+              <td>
+                <div class="d-flex align-items-center">
+                  <div class="avatar-sm me-3">
+                    <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                      <i class="fas fa-user text-white"></i>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="fw-bold">{{ name }}</div>
+                    {% if info.is_admin %}
+                      <small class="text-primary"><i class="fas fa-crown me-1"></i>管理员</small>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="text-muted">{{ info.nickname or '未设置' }}</span>
+              </td>
+              <td>
+                {% if info.is_admin %}
+                  <span class="badge bg-warning text-dark">
+                    <i class="fas fa-user-shield me-1"></i>管理员
+                  </span>
+                {% elif info.is_agent %}
+                  <span class="badge bg-secondary">
+                    <i class="fas fa-user-tag me-1"></i>销售代理
+                  </span>
+                {% elif info.is_distributor %}
+                  <span class="badge bg-success">
+                    <i class="fas fa-users me-1"></i>分销代理
+                  </span>
+                {% else %}
+                  <span class="badge bg-info">
+                    <i class="fas fa-user me-1"></i>普通用户
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                <label class="toggle-switch">
+                  <input type="checkbox" {% if info.enabled %}checked{% endif %} 
+                         onchange="toggleUserStatus('{{ name }}', this)">
+                  <span class="toggle-slider"></span>
+                </label>
+              </td>
+              <td>
+                {% if info.location %}
+                  <div class="d-flex align-items-center">
+                    <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                    <div>
+                      <div class="fw-bold">{{ info.location }}</div>
+                      <small class="text-muted">{{ info.ip_address }}</small>
+                    </div>
+                  </div>
+                {% else %}
+                  <span class="text-muted">
+                    <i class="fas fa-question-circle me-1"></i>未知
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                {% if info.last_login %}
+                  <div>
+                    <div class="fw-bold">{{ info.last_login.split(' ')[0] }}</div>
+                    <small class="text-muted">{{ info.last_login.split(' ')[1] }}</small>
+                  </div>
+                {% else %}
+                  <span class="text-muted">从未登录</span>
+                {% endif %}
+              </td>
+              <td>
+                <div>
+                  <div class="fw-bold">{{ info.created_at.split(' ')[0] }}</div>
+                  <small class="text-muted">{{ info.created_at.split(' ')[1] }}</small>
+                </div>
+              </td>
+              <td>
+                {% if info.user_type == 'stock' %}
+                  <span class="badge bg-secondary">
+                    <i class="fas fa-box me-1"></i>存货
+                  </span>
+                {% elif info.user_type == 'distributed' %}
+                  <span class="badge bg-info">
+                    <i class="fas fa-share-alt me-1"></i>分销售出
+                  </span>
+                {% elif info.user_type == 'direct' %}
+                  <span class="badge bg-success">
+                    <i class="fas fa-building me-1"></i>总部直销
+                  </span>
+                {% else %}
+                  <span class="badge bg-light text-dark">未知</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if info.product %}
+                  <span class="badge bg-light text-dark">{{ info.product }}</span>
+                {% else %}
+                  <span class="text-muted">未设置</span>
+                {% endif %}
+              </td>
+              <td>
+                <div>
+                  <span class="text-muted d-block" id="remark-display-{{ name | replace("'", "\\'") }}" onclick="startRemarkEdit('{{ name | replace("'", "\\'") }}')" style="cursor:pointer; min-height:1.5rem; word-break:break-all;">{{ info.remark or '无备注' }}</span>
+                  <input type="text" class="form-control form-control-sm d-none" id="remark-input-{{ name | replace("'", "\\'") }}" value="{{ info.remark }}" style="width:100%;" onblur="saveRemark('{{ name | replace("'", "\\'") }}')" onkeydown="if(event.key==='Enter'){this.blur();}">
+                </div>
+              </td>
+              <td>
+                {% if info.forsale %}
+                  <span class="badge bg-warning">待售</span>
+                  {% if session.get('agent') and info.owner==session.get('agent') %}
+                  <button type="button" class="btn btn-sm btn-outline-success" onclick="markSold('{{ name | replace("'", "\\'") }}')">标记售出</button>
+                  {% endif %}
+                {% else %}
+                  <span class="badge bg-success">已售</span>
+                {% endif %}
+              </td>
+{% if session.get('admin') %}
+<td>
+  {% if info.owner %}
+    <span class="badge bg-light text-dark">
+      <i class="fas fa-user-tag me-1"></i>{{ info.owner }}
+    </span>
+  {% else %}
+    <span class="text-muted">无</span>
+  {% endif %}
+</td>
+{% endif %}
+              <td>
+                <div class="d-flex gap-1">
+                  <!-- 查看用户名/密码 -->
+                  <button type="button"
+                          class="btn btn-sm btn-outline-secondary"
+                          title="查看用户名/密码"
+                          onclick="viewCred(this, '{{ name | replace("'", "\\'") }}')">
+                    <i class="fas fa-eye"></i>
+                  </button>
+
+                  <button type="button" class="btn btn-sm btn-outline-primary" onclick="openEditModal('{{ name | replace("'", "\\'") }}')" title="编辑用户">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  {% if session.get('admin') %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="删除用户"
+                          form="delete-form-{{ name | replace("'", "\\'") }}"
+                          onclick="return confirm('确定删除用户 {{ name }} 吗？')">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                  <form id="delete-form-{{ name | replace("'", "\\'") }}" method="post"
+                        action="{{ url_for('delete_user', name=name) }}"></form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+ </form>
+
+<!-- 查看凭据弹窗 -->
+<div class="modal fade" id="credModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-id-card me-2"></i>账号信息</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">用户名：<b id="cred-username"></b></div>
+        <div>密　码：<b id="cred-password"></b></div>
+        <small class="text-muted d-block mt-3">请妥善保管，不要对外泄露。请勿使用Ai生成违禁图像，遵守法律法规。</small>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">关闭</button>
+        <button type="button" class="btn btn-primary" onclick="copyCred()">
+          <i class="fas fa-copy me-1"></i>复制
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑用户模态框 -->
+<div class="modal fade" id="edit-user-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" id="edit-user-form">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="fas fa-user-edit me-2"></i>编辑用户 - <span id="edit-username"></span>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label">用户名</label>
+                <input name="username" id="edit-username-input" class="form-control">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label">昵称</label>
+                <input name="nickname" id="edit-nickname-input" class="form-control" placeholder="请输入昵称">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label">新密码</label>
+                <input name="password" id="edit-password-input" type="password" class="form-control" placeholder="留空则不修改">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label">产品</label>
+                <select name="product" id="edit-product-select" class="form-select">
+                  <option value="">请选择产品</option>
+                  {% for p in products.values() %}
+                  <option value="{{ p.name }}" data-price="{{ p.price }}">{{ p.name }} {{ p.version }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="row">
+                {% if session.get('admin') %}
+                <div class="col-md-6">
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" name="is_admin" id="edit-admin-checkbox">
+                    <label class="form-check-label" for="edit-admin-checkbox">
+                      <i class="fas fa-user-shield me-2"></i>管理员权限
+                    </label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" name="is_agent" id="edit-agent-checkbox">
+                    <label class="form-check-label" for="edit-agent-checkbox">
+                      <i class="fas fa-user-tag me-2"></i>销售代理
+                    </label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" name="is_distributor" id="edit-distributor-checkbox">
+                    <label class="form-check-label" for="edit-distributor-checkbox">
+                      <i class="fas fa-users me-2"></i>分销代理
+                    </label>
+                  </div>
+                </div>
+                {% endif %}
+                <div class="col-md-6">
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" name="enabled" id="edit-enabled-checkbox">
+                    <label class="form-check-label" for="edit-enabled-checkbox">
+                      <i class="fas fa-toggle-on me-2"></i>启用账户
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times me-2"></i>取消
+          </button>
+          <button class="btn btn-primary" type="submit">
+            <i class="fas fa-save me-2"></i>保存更改
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# -------- 分页导航（15个页码 + 上下页 + 首页末页 + 跳转） -------- #}
+{% set page_count = ((total-1)//per_page + 1) if per_page else 1 %}
+{% if page_count > 1 %}
+
+{# 组装公共查询串，管理员才带 owner #}
+{% set qs =
+    'q=' ~ (query or '') ~
+    '&nick=' ~ (nick or '') ~
+    '&source=' ~ (source or '') ~
+    '&assigned_distributor=' ~ (request.args.get('assigned_distributor', '') or '') ~
+    '&status=' ~ (status or '') ~
+    '&sale=' ~ (sale or '') ~
+    '&sort=' ~ (sort or '') ~
+    '&start=' ~ (start or '') ~
+    '&end=' ~ (end or '') ~
+    ('&owner=' ~ owner if session.get('admin') else '') ~
+    '&per_page=' ~ (per_page|string)
+%}
+
+{# 计算页码窗口：最多显示15个 #}
+{% set window = 15 %}
+{% set start_page = page - (window//2) %}
+{% if start_page < 1 %}{% set start_page = 1 %}{% endif %}
+{% set end_page = start_page + window - 1 %}
+{% if end_page > page_count %}{% set end_page = page_count %}{% endif %}
+{% set start_page = end_page - window + 1 %}
+{% if start_page < 1 %}{% set start_page = 1 %}{% endif %}
+
+<nav class="mt-4">
+  <ul class="pagination justify-content-center flex-wrap gap-1">
+
+    {# 首页 #}
+    <li class="page-item {{ 'disabled' if page == 1 }}">
+      <a class="page-link" href="?page=1&{{ qs }}">« 首页</a>
+    </li>
+
+    {# 上一页 #}
+    <li class="page-item {{ 'disabled' if page == 1 }}">
+      <a class="page-link" href="?page={{ 1 if page<=1 else page-1 }}&{{ qs }}">‹ 上一页</a>
+    </li>
+
+    {# 页码窗口 #}
+    {% for p in range(start_page, end_page + 1) %}
+      <li class="page-item {{ 'active' if p==page }}">
+        <a class="page-link" href="?page={{ p }}&{{ qs }}">{{ p }}</a>
+      </li>
+    {% endfor %}
+
+    {# 下一页 #}
+    <li class="page-item {{ 'disabled' if page == page_count }}">
+      <a class="page-link" href="?page={{ page_count if page>=page_count else page+1 }}&{{ qs }}">下一页 ›</a>
+    </li>
+
+    {# 末页 #}
+    <li class="page-item {{ 'disabled' if page == page_count }}">
+      <a class="page-link" href="?page={{ page_count }}&{{ qs }}">末页 »</a>
+    </li>
+  </ul>
+
+  {# 跳转输入 #}
+  <div class="d-flex justify-content-center align-items-center gap-2 mt-2">
+    <span class="text-muted small">共 {{ page_count }} 页，跳转到</span>
+    <input id="jumpPageInput" type="number" min="1" max="{{ page_count }}" class="form-control form-control-sm" style="width: 90px;">
+    <button id="jumpPageBtn" type="button" class="btn btn-sm btn-outline-primary">Go</button>
+  </div>
+</nav>
+
+<script>
+  (function(){
+    const input = document.getElementById('jumpPageInput');
+    const btn = document.getElementById('jumpPageBtn');
+    if(!input || !btn) return;
+    function jump(){
+      let p = parseInt(input.value, 10);
+      const max = {{ page_count }};
+      if(isNaN(p)) return;
+      if(p < 1) p = 1;
+      if(p > max) p = max;
+      // 保留检索参数
+      const qs = "{{ qs|e }}";
+      location.href = `?page=${p}&${qs}`;
+    }
+    btn.addEventListener('click', jump);
+    input.addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ jump(); }});
+  })();
+</script>
+
+{% endif %}
+
+{% if session.get('admin') %}
+<!-- 新增用户模态框 -->
+<div class="modal fade" id="add-user" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('add_user') }}">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="fas fa-user-plus me-2"></i>新增用户
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label">用户名 <span class="text-danger">*</span></label>
+                <input name="username" id="add-name" class="form-control" required placeholder="请输入用户名">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label">密码 <span class="text-danger">*</span></label>
+                <input name="password" id="add-pass" type="password" class="form-control" required placeholder="请输入密码">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label">昵称</label>
+                <input name="nickname" class="form-control" placeholder="请输入昵称">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label class="form-label">单价(元)</label>
+                <input name="price" type="number" step="0.01" class="form-control" value="0" min="0">
+              </div>
+            </div>
+            <div class="col-md-8">
+              <div class="mb-3">
+                <label class="form-label">产品</label>
+                <select name="product" class="form-select" id="add-product">
+                  <option value="">请选择产品</option>
+                  {% for p in products.values() %}
+                  <option value="{{ p.name }}" data-price="{{ p.price }}" {% if p.default %}selected{% endif %}>{{ p.name }} {{ p.version }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="mb-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="rand" onclick="genRandom(this.checked)">
+                  <label class="form-check-label" for="rand">
+                    <i class="fas fa-dice me-2"></i>随机生成
+                  </label>
+                </div>
+              </div>
+            </div>
+              {% if session.get('admin') %}
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label class="form-label">&nbsp;</label>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="is_admin" id="add-admin">
+                    <label class="form-check-label" for="add-admin">
+                      <i class="fas fa-user-shield me-2"></i>管理员权限
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label class="form-label">&nbsp;</label>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="is_agent" id="add-agent">
+                    <label class="form-check-label" for="add-agent">
+                      <i class="fas fa-user-tag me-2"></i>销售代理
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mb-3">
+                  <label class="form-label">&nbsp;</label>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="is_distributor" id="add-distributor">
+                    <label class="form-check-label" for="add-distributor">
+                      <i class="fas fa-users me-2"></i>分销代理
+                    </label>
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="fas fa-times me-2"></i>取消
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>创建用户
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- 账号分配模态框 -->
+<div class="modal fade" id="account-assign-modal" tabindex="-1" aria-labelledby="accountAssignModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="accountAssignModalLabel">
+          <i class="fas fa-share-alt me-2"></i>账号分配
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">选择分销商</label>
+          <select class="form-select" id="distributor-select" required>
+            <option value="">请选择分销商...</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">已选择账号</label>
+          <div id="selected-accounts" class="border rounded p-2 bg-light" style="min-height: 60px;">
+            <small class="text-muted">请先选择要分配的账号</small>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="fas fa-times me-2"></i>取消
+        </button>
+        <button type="button" class="btn btn-primary" onclick="executeAccountAssign()">
+          <i class="fas fa-check me-2"></i>确认分配
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 用户数据存储
+  const usersData = {
+    {% for name, info in users.items() %}
+    '{{ name | replace("'", "\\'") }}': {
+      username: '{{ name | replace("'", "\\'") }}',
+      user_id: '{{ info.user_id }}',
+      nickname: '{{ info.nickname | replace("'", "\\'") }}',
+      is_admin: {{ 'true' if info.is_admin else 'false' }},
+      is_agent: {{ 'true' if info.is_agent else 'false' }},
+      enabled: {{ 'true' if info.enabled else 'false' }},
+      product: '{{ info.product | replace("'", "\\'") }}'
+    },
+    {% endfor %}
+  };
+
+  // 打开编辑模态框
+  const isAgent = {{ 'true' if session.get('agent') else 'false' }};
+
+  function openEditModal(username) {
+    const user = usersData[username];
+    if (!user) return;
+
+    // 设置表单action
+    const base = isAgent ? '/sales/users/' : '/users/';
+    document.getElementById('edit-user-form').action = `${base}${encodeURIComponent(username)}/update`;
+    
+    // 填充表单数据
+    document.getElementById('edit-username').textContent = username;
+    document.getElementById('edit-username-input').value = user.username;
+    document.getElementById('edit-nickname-input').value = user.nickname;
+    document.getElementById('edit-password-input').value = '';
+    const adminBox = document.getElementById('edit-admin-checkbox');
+    if (adminBox) adminBox.checked = user.is_admin;
+    const agentBox = document.getElementById('edit-agent-checkbox');
+    if (agentBox) agentBox.checked = user.is_agent;
+    document.getElementById('edit-enabled-checkbox').checked = user.enabled;
+    
+    // 设置产品选择
+    const productSelect = document.getElementById('edit-product-select');
+    productSelect.value = user.product;
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('edit-user-modal'));
+    modal.show();
+  }
+
+  function genRandom(flag){
+    if(flag){
+      fetch('{{ url_for("random_account") }}').then(r=>r.json()).then(d=>{
+        document.getElementById('add-name').value=d.username;
+        document.getElementById('add-pass').value=d.password;
+      });
+    }
+  }
+  
+  const prodSel=document.getElementById('add-product');
+  const priceInput=document.querySelector('#add-user input[name="price"]');
+  if(prodSel){
+    function setPrice(){
+      const p=prodSel.selectedOptions[0].dataset.price;
+      if(p!==undefined && (priceInput.value=='' || priceInput.value=='0')){priceInput.value=p;}
+    }
+    prodSel.addEventListener('change',setPrice);setPrice();
+  }
+
+  function startRemarkEdit(username){
+    const display=document.getElementById(`remark-display-${username}`);
+    const input=document.getElementById(`remark-input-${username}`);
+    display.classList.add('d-none');
+    input.classList.remove('d-none');
+    input.value=display.textContent.trim()==='无备注'?'':display.textContent.trim();
+    input.focus();
+  }
+
+  function saveRemark(username){
+    const display=document.getElementById(`remark-display-${username}`);
+    const input=document.getElementById(`remark-input-${username}`);
+    const value=input.value.trim();
+    const base=isAgent?'/sales/users/':'/users/';
+    fetch(`${base}${encodeURIComponent(username)}/update`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({remark:value})
+    }).then(r=>r.json()).then(d=>{
+      if(d.success){
+        display.textContent=value||'无备注';
+      }else{alert('保存失败');}
+    }).finally(()=>{
+      input.classList.add('d-none');
+      display.classList.remove('d-none');
+    });
+  }
+
+  function markSold(username){
+    fetch(`/sales/users/${encodeURIComponent(username)}/sold`,{
+      method:'POST',
+      headers:{'Accept':'application/json'}
+    }).then(r=>r.json()).then(d=>{
+        if(d.success){location.reload();}else{alert('标记失败');}
+    });
+  }
+
+  document.getElementById('batchForm').addEventListener('submit',function(e){
+    const action = e.submitter ? e.submitter.value : '';
+    if(['delete','enable','disable','sold'].includes(action)){
+      if(!this.querySelector('input[name="names"]:checked')){
+        e.preventDefault();
+        alert('请选择要操作的用户');
+      }
+    }
+  });
+  // ========== 查看/复制 用户名与密码（Popover 就地显示） ==========
+  let activePopover = null;
+
+  function showToast(message, type='danger') {
+    const id = 'toast-' + Date.now();
+    const wrap = document.getElementById('toast-wrap');
+    const el = document.createElement('div');
+    el.className = `toast align-items-center text-bg-${type} border-0`;
+    el.id = id;
+    el.role = 'alert';
+    el.ariaLive = 'assertive';
+    el.ariaAtomic = 'true';
+    el.innerHTML = `
+      <div class="d-flex">
+        <div class="toast-body">${message}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>`;
+    wrap.appendChild(el);
+    const t = new bootstrap.Toast(el, { delay: 3000 });
+    t.show();
+    el.addEventListener('hidden.bs.toast', () => el.remove());
+  }
+
+async function viewCred(btn, userId){
+  try{
+    // 关闭已有的 popover，避免多个叠在一起
+    if(activePopover){
+      activePopover.dispose();
+      activePopover = null;
+    }
+
+    const resp = await fetch(`/api/users/${encodeURIComponent(userId)}/credentials`, { credentials: 'include' });
+    const data = await resp.json().catch(()=>({}));
+
+    if(!resp.ok || !data || data.code !== 0){
+      showToast((data && data.msg) ? data.msg : '获取账号信息失败');
+      return;
+    }
+
+    const u = (data.data && data.data.username) || '';
+    const p = (data.data && data.data.password) || '';
+    const text = `用户名：${u}，密码：${p}。请妥善保管。请严格遵守法律法规使用Ai生成技术，切勿生成涉黄涉暴图像。`;
+
+    // 构造 Popover 内容
+    const content = document.createElement('div');
+    content.innerHTML = `
+      <div class="small">
+        <div class="mb-1">用户名：<b>${u}</b></div>
+        <div>密　码：<b>${p}</b></div>
+        <button type="button" class="btn btn-sm btn-primary mt-2" id="copy-cred-btn">
+          <i class="fas fa-copy me-1"></i>复制
+        </button>
+      </div>
+    `;
+
+    // 创建并显示 Popover（靠近按钮出现）
+    activePopover = new bootstrap.Popover(btn, {
+      html: true,
+      content,
+      container: 'body',
+      placement: 'left',
+      trigger: 'manual',
+      customClass: 'cred-popover'
+    });
+    activePopover.show();
+
+    // 复制事件
+    const copyBtn = document.getElementById('copy-cred-btn');
+    if(copyBtn){
+      copyBtn.addEventListener('click', async () => {
+        try{
+          await navigator.clipboard.writeText(text);
+          showToast('已复制到剪贴板', 'success');
+        }catch(e){
+          // 兜底复制
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          showToast('已复制到剪贴板', 'success');
+        }
+      });
+    }
+
+    // 点击页面其它区域时关闭
+    document.addEventListener('click', function onDocClick(e){
+      if(!btn.contains(e.target) && !content.contains(e.target)){
+        if(activePopover){ activePopover.dispose(); activePopover = null; }
+        document.removeEventListener('click', onDocClick, true);
+      }
+    }, true);
+
+  }catch(err){
+    console.error(err);
+    showToast('请求出错');
+  }
+}
+window.viewCred = viewCred;
+
+// 导出选中用户功能
+function exportSelectedUsers() {
+  const checkboxes = document.querySelectorAll('input[name="names"]:checked');
+  if (checkboxes.length === 0) {
+    showToast('请先选择要导出的用户', 'warning');
+    return;
+  }
+  
+  const userIds = Array.from(checkboxes).map(cb => cb.value);
+  
+  // 创建表单并提交
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/sales/export_users';
+  form.style.display = 'none';
+  
+  userIds.forEach(userId => {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'user_ids';
+    input.value = userId;
+    form.appendChild(input);
+  });
+  
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+}
+window.exportSelectedUsers = exportSelectedUsers;
+
+// 批量复制用户功能
+async function copySelectedUsers() {
+  const checkboxes = document.querySelectorAll('input[name="names"]:checked');
+  if (checkboxes.length === 0) {
+    showToast('请先选择要复制的用户', 'warning');
+    return;
+  }
+  
+  try {
+    let copyText = '';
+    let successCount = 0;
+    
+    // 显示加载提示
+    showToast('正在获取用户信息...', 'info');
+    
+    for (const checkbox of checkboxes) {
+      const userId = checkbox.value;
+      try {
+        const resp = await fetch(`/api/users/${encodeURIComponent(userId)}/credentials`, { credentials: 'include' });
+        const data = await resp.json().catch(() => ({}));
+        
+        if (resp.ok && data && data.code === 0) {
+          const username = (data.data && data.data.username) || '';
+          const password = (data.data && data.data.password) || '';
+          copyText += `用户名：${username}，密码：${password}\n`;
+          successCount++;
+        }
+      } catch (e) {
+        console.error('获取用户凭据失败:', userId, e);
+      }
+    }
+    
+    if (successCount === 0) {
+      showToast('未能获取到任何用户信息', 'error');
+      return;
+    }
+    
+    // 复制到剪贴板
+    await navigator.clipboard.writeText(copyText.trim());
+    showToast(`已复制 ${successCount} 个用户的信息到剪贴板`, 'success');
+    
+  } catch (e) {
+    console.error('复制失败:', e);
+    showToast('复制失败，请重试', 'error');
+  }
+}
+window.copySelectedUsers = copySelectedUsers;
+
+// 账号分配相关函数
+async function showAccountAssignModal() {
+  const checkboxes = document.querySelectorAll('input[name="names"]:checked');
+  if (checkboxes.length === 0) {
+    showToast('请先选择要分配的账号', 'warning');
+    return;
+  }
+
+  // 检查选中的账号是否符合分配条件（总部直销且已售）
+  const selectedAccounts = [];
+  for (const checkbox of checkboxes) {
+    const username = checkbox.value;
+    const user = usersData[username];
+    if (user) {
+      selectedAccounts.push({
+        username: username,
+        nickname: user.nickname || username
+      });
+    }
+  }
+
+  if (selectedAccounts.length === 0) {
+    showToast('未找到可分配的账号', 'warning');
+    return;
+  }
+
+  // 显示选中的账号
+  const accountsDiv = document.getElementById('selected-accounts');
+  accountsDiv.innerHTML = selectedAccounts.map(acc => 
+    `<span class="badge bg-primary me-1 mb-1">${acc.nickname || acc.username}</span>`
+  ).join('');
+
+  // 加载分销商列表
+  try {
+    const response = await fetch('/sales/distributors');
+    const data = await response.json();
+    
+    const select = document.getElementById('distributor-select');
+    select.innerHTML = '<option value="">请选择分销商...</option>';
+    
+    if (data.code === 0 && data.data) {
+      data.data.forEach(distributor => {
+        const option = document.createElement('option');
+        option.value = distributor.username;
+        option.textContent = `${distributor.nickname || distributor.username} (${distributor.username})`;
+        select.appendChild(option);
+      });
+    }
+  } catch (e) {
+    console.error('加载分销商列表失败:', e);
+    showToast('加载分销商列表失败', 'error');
+    return;
+  }
+
+  // 显示模态框
+  const modal = new bootstrap.Modal(document.getElementById('account-assign-modal'));
+  modal.show();
+}
+
+async function executeAccountAssign() {
+  const distributorSelect = document.getElementById('distributor-select');
+  const selectedDistributor = distributorSelect.value;
+  
+  if (!selectedDistributor) {
+    showToast('请选择分销商', 'warning');
+    return;
+  }
+
+  const checkboxes = document.querySelectorAll('input[name="names"]:checked');
+  const selectedAccounts = Array.from(checkboxes).map(cb => cb.value);
+
+  if (selectedAccounts.length === 0) {
+    showToast('请选择要分配的账号', 'warning');
+    return;
+  }
+
+  try {
+    const response = await fetch('/sales/assign_accounts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        distributor: selectedDistributor,
+        accounts: selectedAccounts
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.code === 0) {
+      showToast(`成功分配 ${selectedAccounts.length} 个账号给 ${distributorSelect.options[distributorSelect.selectedIndex].text}`, 'success');
+      
+      // 关闭模态框
+      const modal = bootstrap.Modal.getInstance(document.getElementById('account-assign-modal'));
+      modal.hide();
+      
+      // 刷新页面
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
+    } else {
+      showToast(data.message || '分配失败', 'error');
+    }
+  } catch (e) {
+    console.error('账号分配失败:', e);
+    showToast('账号分配失败，请重试', 'error');
+  }
+}
+
+// 页面加载时初始化分销代理下拉框
+document.addEventListener('DOMContentLoaded', function() {
+  loadDistributorFilter();
+});
+
+// 加载分销代理筛选下拉框
+async function loadDistributorFilter() {
+  try {
+    const response = await fetch('/sales/distributors');
+    const data = await response.json();
+    
+    const select = document.getElementById('assigned_distributor');
+    if (!select) return;
+    
+    // 从URL参数中获取当前选中的值
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentValue = urlParams.get('assigned_distributor') || '';
+    
+    // 清空并重新填充选项
+    select.innerHTML = '<option value="">全部分销代理</option>';
+    
+    if (data.code === 0 && data.data) {
+      data.data.forEach(distributor => {
+        const option = document.createElement('option');
+        option.value = distributor.username;
+        option.textContent = distributor.nickname || distributor.username;
+        // 根据URL参数设置选中状态
+        if (distributor.username === currentValue) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+    }
+    
+    // 设置select的值以确保正确显示
+    select.value = currentValue;
+  } catch (e) {
+    console.error('加载分销代理列表失败:', e);
+  }
+}
+
+  // ============================================
+</script>
+  <!-- Toast 容器（右下角） -->
+  <div id="toast-wrap" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:1080;"></div>
+
+{% endblock %}
+

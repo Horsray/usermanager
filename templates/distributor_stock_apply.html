@@ -1,0 +1,212 @@
+{% extends 'layout.html' %}
+{% block title %}账号进货申请{% endblock %}
+{% block content %}
+
+<!-- 页面标题 -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+  <h2 class="mb-1" style="color: var(--gray-800); font-weight: 700;">
+    <i class="fas fa-shopping-cart me-3" style="color: var(--primary-color);"></i>账号进货申请
+  </h2>
+  <p class="text-muted mb-0">向代理商申请进货账号</p>
+  </div>
+</div>
+
+{% if success %}
+<div class="alert alert-success">申请提交成功，请等待代理商审批</div>
+{% endif %}
+
+{% if error_message %}
+<div class="alert alert-danger">{{ error_message }}</div>
+{% endif %}
+
+<!-- 进货申请表单 -->
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="fas fa-plus-circle me-2"></i>账号进货申请
+  </div>
+  <div class="card-body">
+    <form class="row g-3" method="post" action="{{ url_for('distributor_stock_apply') }}" id="stock-apply-form">
+      <div class="col-md-3">
+        <label class="form-label">进货数量</label>
+        <input type="number" name="quantity" class="form-control" value="1" min="1" max="100" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">产品类型</label>
+        <select name="product" class="form-select" required>
+          <option value="">请选择产品</option>
+          {% for product in products.values() %}
+          <option value="{{ product.name }}">{{ product.name }} {{ product.version }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">代理商</label>
+        {% if bound_agent %}
+          <div class="form-control-plaintext bg-light p-2 rounded">
+            <i class="fas fa-user-tie me-2 text-primary"></i>
+            <strong>{{ bound_agent.nickname or bound_agent.username }}</strong>
+            <small class="text-muted">({{ bound_agent.username }})</small>
+          </div>
+          <input type="hidden" name="agent" value="{{ bound_agent.username }}">
+        {% else %}
+          <div class="alert alert-warning mb-0">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            您尚未绑定代理商，请联系管理员
+          </div>
+        {% endif %}
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">&nbsp;</label>
+        <button type="button" class="btn btn-primary d-block w-100" data-bs-toggle="modal" data-bs-target="#confirm-stock-modal">
+          <i class="fas fa-paper-plane me-2"></i>提交申请
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 我的申请记录 -->
+<div class="card">
+  <div class="card-header">
+    <i class="fas fa-clock me-2"></i>我的申请记录
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr><th>提交时间</th><th>代理商</th><th>产品</th><th>数量</th><th>状态</th><th>处理时间</th></tr>
+        </thead>
+        <tbody>
+        {% for r in requests %}
+        <tr>
+          <td>{{ r.created_at }}</td>
+          <td>{{ r.agent }}</td>
+          <td>{{ r.product }}</td>
+          <td>{{ r.quantity }}</td>
+          <td>
+            {% if r.status=='pending' %}<span class="text-primary">待审核</span>
+            {% elif r.status=='approved' %}<span class="text-success">审批通过</span>
+            {% else %}<span class="text-danger">已拒绝</span>{% endif %}
+          </td>
+          <td>
+            {% if r.status == 'approved' %}{{ r.approved_at or '-' }}
+            {% elif r.status == 'rejected' %}{{ r.rejected_at or '-' }}
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- 分页导航 -->
+    {% if pagination.total_pages > 1 %}
+    <div class="card-footer">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="text-muted">
+          显示第 {{ pagination.start_record }} - {{ pagination.end_record }} 条，共 {{ pagination.total }} 条记录
+        </div>
+        <nav aria-label="申请记录分页">
+          <ul class="pagination pagination-sm mb-0">
+            {% if pagination.has_prev %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('distributor_stock_apply', page=pagination.prev_num) }}">上一页</a>
+            </li>
+            {% endif %}
+            
+            {% for page_num in range(1, pagination.total_pages + 1) %}
+            {% if page_num == pagination.page %}
+            <li class="page-item active">
+              <span class="page-link">{{ page_num }}</span>
+            </li>
+            {% else %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('distributor_stock_apply', page=page_num) }}">{{ page_num }}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+            
+            {% if pagination.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('distributor_stock_apply', page=pagination.next_num) }}">下一页</a>
+            </li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 确认对话框 -->
+<div class="modal fade" id="confirm-stock-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-exclamation-triangle text-warning me-2"></i>确认进货申请
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info">
+          <i class="fas fa-info-circle me-2"></i>
+          <strong>申请信息确认：</strong>请确认以下申请信息无误后提交。
+        </div>
+        <div class="row">
+          <div class="col-6">
+            <strong>进货数量：</strong><span id="confirm-quantity"></span>
+          </div>
+          <div class="col-6">
+            <strong>产品类型：</strong><span id="confirm-product"></span>
+          </div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-12">
+            <strong>代理商：</strong><span id="confirm-agent"></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="confirm-submit">
+          <i class="fas fa-paper-plane me-2"></i>确认提交
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 确认提交前显示信息
+document.querySelector('[data-bs-target="#confirm-stock-modal"]').addEventListener('click', function() {
+    const form = document.getElementById('stock-apply-form');
+    const quantity = form.querySelector('[name="quantity"]').value;
+    const product = form.querySelector('[name="product"]').selectedOptions[0]?.text || '';
+    
+    // 获取代理商信息（可能是隐藏字段或显示文本）
+    const agentInput = form.querySelector('[name="agent"]');
+    let agent = '';
+    if (agentInput && agentInput.type === 'hidden') {
+        // 如果是隐藏字段，从显示的文本中获取
+        const agentDisplay = form.querySelector('.form-control-plaintext strong');
+        agent = agentDisplay ? agentDisplay.textContent : agentInput.value;
+    } else if (agentInput && agentInput.selectedOptions) {
+        // 如果是选择框
+        agent = agentInput.selectedOptions[0]?.text || '';
+    }
+    
+    document.getElementById('confirm-quantity').textContent = quantity + ' 个';
+    document.getElementById('confirm-product').textContent = product;
+    document.getElementById('confirm-agent').textContent = agent;
+});
+
+// 确认提交
+document.getElementById('confirm-submit').addEventListener('click', function() {
+    document.getElementById('stock-apply-form').submit();
+});
+</script>
+
+{% endblock %}

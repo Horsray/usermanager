@@ -1,0 +1,112 @@
+{% extends 'layout.html' %}
+{% block title %}订单审批{% endblock %}
+{% block content %}
+<h2 class="mb-3">待审批申请</h2>
+<form method="post" action="{{ url_for('batch_applications') }}" id="batch-app-form">
+<div class="mb-2">
+  <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">批量通过</button>
+  <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm ms-2">批量拒绝</button>
+</div>
+<table class="table">
+  <thead>
+    <tr><th></th><th>代理</th><th>数量</th><th>价格</th><th>进货单价</th><th>进货总价</th><th>产品</th><th>状态</th><th>操作</th></tr>
+  </thead>
+  <tbody>
+  {% for a in apps %}
+    <tr>
+      <td><input type="checkbox" name="ids" value="{{ a.id }}" {% if a.status != 'pending' %}disabled{% endif %}></td>
+      <td>{{ a.agent }}</td>
+      <td>{{ a.count }}</td>
+      <td>{{ a.price }}</td>
+      <td>{{ a.purchase_price or '-' }}</td>
+      <td>
+        {% if a.purchase_price %}
+          ¥{{ "%.2f"|format(a.count * a.purchase_price) }}
+        {% else %}
+          -
+        {% endif %}
+      </td>
+      <td>{{ a.product }}</td>
+      <td>
+        {% if a.status == 'pending' %}
+          <span class="text-primary">待审批</span>
+        {% elif a.status == 'approved' %}
+          <span class="text-success">已通过</span>
+        {% else %}
+          <span class="text-danger">已拒绝</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if a.status == 'pending' %}
+        <button type="submit" formaction="{{ url_for('approve_application', app_id=a.id) }}" formmethod="post" class="btn btn-sm btn-success">通过</button>
+        <button type="submit" formaction="{{ url_for('reject_application', app_id=a.id) }}" formmethod="post" class="btn btn-sm btn-danger ms-1">拒绝</button>
+        <button type="button" class="btn btn-sm btn-secondary ms-1" onclick="openEditApp('{{ a.id }}','{{ a.count }}','{{ a.price }}','{{ a.product }}','{{ a.purchase_price or 0 }}')">修改</button>
+        {% else %}-{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</form>
+
+<!-- 修改申请模态框 -->
+<div class="modal fade" id="edit-app-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" id="edit-app-form">
+        <div class="modal-header">
+          <h5 class="modal-title">修改申请</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">数量</label>
+            <input name="count" id="edit-app-count" class="form-control" type="number" min="1">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">单价</label>
+            <input name="price" id="edit-app-price" class="form-control" type="number" step="0.01">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">进货单价</label>
+            <input name="purchase_price" id="edit-app-purchase-price" class="form-control" type="number" step="0.01">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">产品</label>
+            <select name="product" id="edit-app-product" class="form-select">
+              {% for p in products.values() %}
+              <option value="{{ p.name }}">{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openEditApp(id,count,price,product,purchase_price){
+    const form=document.getElementById('edit-app-form');
+    form.action=`/applications/${id}/update`;
+    document.getElementById('edit-app-count').value=count;
+    document.getElementById('edit-app-price').value=price;
+    document.getElementById('edit-app-purchase-price').value=purchase_price || '';
+    document.getElementById('edit-app-product').value=product;
+    new bootstrap.Modal(document.getElementById('edit-app-modal')).show();
+  }
+  document.getElementById('batch-app-form').addEventListener('submit',function(e){
+    const action = e.submitter ? e.submitter.value : '';
+    if(action==='approve' || action==='reject'){
+      if(!this.querySelector('input[name="ids"]:checked')){
+        e.preventDefault();
+        alert('请选择要操作的申请');
+      }
+    }
+  });
+</script>
+{% endblock %}
