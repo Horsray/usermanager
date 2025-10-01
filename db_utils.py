@@ -8,6 +8,8 @@ import threading
 from contextlib import closing
 from datetime import datetime
 
+from domain_models import normalize_user_store
+
 # 数据库路径 - 默认使用绘影租户数据库
 DB_PATH = 'user-700243.db'
 USERS_FILE = 'users.json'
@@ -56,21 +58,22 @@ def load_users():
                 users = data.get('users', {})
         except (json.JSONDecodeError, FileNotFoundError):
             pass
-    
-    return users
+
+    return normalize_user_store(users)
 
 def save_users(users):
     """
     保存用户数据到数据库和JSON文件
     """
     with db_lock:
+        users = normalize_user_store(users)
         # 保存到数据库
         if os.path.exists(DB_PATH) or True:  # 总是尝试保存到数据库
             try:
                 with closing(sqlite3.connect(DB_PATH)) as conn:
                     # 清空现有数据
                     conn.execute('DELETE FROM users')
-                    
+
                     # 插入新数据
                     for username, user_data in users.items():
                         data_json = json.dumps(user_data, ensure_ascii=False)

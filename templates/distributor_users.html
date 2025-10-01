@@ -76,6 +76,9 @@
         <span class="badge bg-light text-success border border-success fs-6 px-3 py-2">
           <i class="fas fa-check-circle me-2"></i>已售账户：{{ sold_users }}
         </span>
+        <span class="badge bg-secondary text-white fs-6 px-3 py-2">
+          <i class="fas fa-user-friends me-2"></i>托管客户：{{ managed_users }}
+        </span>
       </div>
     </form>
   </div>
@@ -220,6 +223,10 @@
                 {% elif user.user_type == 'unsold' %}
                   <span class="badge bg-warning text-dark">
                     <i class="fas fa-box me-1"></i>库存
+                  </span>
+                {% elif user.user_type == 'managed' %}
+                  <span class="badge bg-secondary">
+                    <i class="fas fa-hands-helping me-1"></i>托管
                   </span>
                 {% else %}
                   <span class="badge bg-secondary">
